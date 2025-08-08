@@ -1,5 +1,5 @@
-﻿import React, { useState, useRef } from "react";
-import html2canvas from "html2canvas";
+﻿import React, { useState, useRef } from 'react';
+import html2canvas from 'html2canvas';
 
 const MARKER_TYPES = [
     { type: "camera", emoji: "📷" },
@@ -10,18 +10,15 @@ const MARKER_TYPES = [
     { type: "projector", emoji: "📽️" },
 ];
 
-export default function App() {
+function App() {
     const [imageSrc, setImageSrc] = useState(null);
     const [markers, setMarkers] = useState([]);
     const [selectedType, setSelectedType] = useState(null);
-
-    // Modal state
     const [showExportModal, setShowExportModal] = useState(false);
     const [exportFilename, setExportFilename] = useState("layout");
 
     const containerRef = useRef(null);
 
-    // Add marker on click
     const handleImageClick = (e) => {
         if (!selectedType || !containerRef.current) return;
 
@@ -38,7 +35,6 @@ export default function App() {
         setMarkers((m) => [...m, { id: Date.now(), type: selectedType, x, y }]);
     };
 
-    // Drag marker
     const dragMarker = (id, clientX, clientY) => {
         if (!containerRef.current) return;
 
@@ -58,7 +54,6 @@ export default function App() {
         );
     };
 
-    // Convert image to data URL for JSON export
     const imageToDataURL = (src) =>
         new Promise((resolve, reject) => {
             if (!src) return reject(new Error("No image source"));
@@ -77,13 +72,11 @@ export default function App() {
             img.src = src;
         });
 
-    // Export function with filename parameter
     const exportAll = async (filename) => {
         if (!imageSrc || !containerRef.current) return;
 
         const name = filename || "layout";
 
-        // Export JSON
         let imageData;
         try {
             imageData = imageSrc.startsWith("data:")
@@ -105,7 +98,6 @@ export default function App() {
         a.click();
         URL.revokeObjectURL(jsonUrl);
 
-        // Export PNG
         const container = containerRef.current;
         const canvas = await html2canvas(container, {
             backgroundColor: null,
@@ -119,7 +111,6 @@ export default function App() {
         pngLink.click();
     };
 
-    // Handle file input (image or JSON)
     const handleImageUpload = (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -150,174 +141,216 @@ export default function App() {
     };
 
     return (
-        <div style={{ padding: 20, fontFamily: "sans-serif" }}>
-            <h1>SiteMapper</h1>
-
-            {/* Import + Export row */}
-            <div
-                style={{
-                    display: "flex",
-                    gap: 8,
-                    alignItems: "center",
-                    marginBottom: 10,
-                    flexWrap: "wrap",
-                }}
-            >
-                <input
-                    type="file"
-                    accept="image/png,image/jpeg,application/json"
-                    onChange={handleImageUpload}
-                />
-                <button
-                    onClick={() => setShowExportModal(true)}
-                    disabled={!imageSrc}
-                    aria-label="Export JSON + PNG"
-                >
-                    Export JSON + PNG
-                </button>
-            </div>
-
-            {/* Marker selector */}
-            <div style={{ marginBottom: 10 }}>
-                <strong>Select Marker Type: </strong>
-                {MARKER_TYPES.map(({ type, emoji }) => (
-                    <button
-                        key={type}
-                        onClick={() => setSelectedType((cur) => (cur === type ? null : type))}
-                        style={{
-                            fontSize: 24,
-                            marginRight: 8,
-                            background: selectedType === type ? "#2e86de" : "#ddd",
-                            color: selectedType === type ? "white" : "black",
-                            border: "none",
-                            padding: "4px 8px",
-                            cursor: "pointer",
-                        }}
-                    >
-                        {emoji}
+        <div className="min-h-screen bg-gray-50">
+            {/* Header */}
+            <header className="bg-blue-600 text-white p-4 flex justify-between items-center">
+                <div className="flex items-center">
+                    <button className="mr-4 text-white hover:text-gray-200">
+                        ≡
                     </button>
-                ))}
-            </div>
-
-            {/* Image + markers */}
-            {imageSrc ? (
-                <div
-                    ref={containerRef}
-                    onClick={handleImageClick}
-                    style={{
-                        position: "relative",
-                        display: "inline-block",
-                        border: "2px solid #333",
-                        width: "100%",
-                        maxWidth: "1000px",
-                    }}
-                >
-                    <img
-                        src={imageSrc}
-                        alt="Floorplan"
-                        style={{ display: "block", width: "100%", height: "auto" }}
-                        draggable={false}
-                    />
-                    {markers.map(({ id, type, x, y }) => {
-                        const emoji = MARKER_TYPES.find((m) => m.type === type)?.emoji || "❓";
-                        return (
-                            <div
-                                key={id}
-                                draggable
-                                onDrag={(e) => e.preventDefault()}
-                                onDragStart={(e) => {
-                                    e.dataTransfer.setData("text/plain", id);
-                                }}
-                                onDragEnd={(e) => dragMarker(id, e.clientX, e.clientY)}
-                                style={{
-                                    position: "absolute",
-                                    left: `${x * 100}%`,
-                                    top: `${y * 100}%`,
-                                    fontSize: 30,
-                                    cursor: "grab",
-                                    userSelect: "none",
-                                    transform: "translate(-50%, -50%)",
-                                }}
-                                title={type}
-                            >
-                                {emoji}
-                            </div>
-                        );
-                    })}
+                    <h1 className="text-xl font-semibold">JobSite Marker</h1>
                 </div>
-            ) : (
-                <p>Please upload a floorplan image to start.</p>
-            )}
-
-            {/* Export filename modal */}
-            {showExportModal && (
-                <div
-                    style={{
-                        position: "fixed",
-                        top: 0,
-                        left: 0,
-                        width: "100vw",
-                        height: "100vh",
-                        backgroundColor: "rgba(0,0,0,0.5)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        zIndex: 9999,
-                    }}
+                <button
+                    className="bg-white text-blue-600 px-4 py-2 rounded hover:bg-gray-100"
+                    onClick={() => document.getElementById('fileInput').click()}
                 >
-                    <div
-                        style={{
-                            backgroundColor: "white",
-                            padding: 20,
-                            borderRadius: 8,
-                            width: 300,
-                            boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: 12,
-                        }}
-                    >
-                        <label htmlFor="filenameInput" style={{ fontWeight: "bold" }}>
-                            Enter filename:
-                        </label>
-                        <input
-                            id="filenameInput"
-                            type="text"
-                            value={exportFilename}
-                            onChange={(e) => setExportFilename(e.target.value)}
-                            autoFocus
-                            style={{ padding: 8, fontSize: 16 }}
-                        />
-                        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-                            <button
-                                onClick={() => setShowExportModal(false)}
-                                style={{ padding: "6px 12px" }}
+                    Import
+                </button>
+            </header>
+
+            {/* Main Content */}
+            <main className="flex items-center justify-center min-h-[calc(100vh-64px)]">
+                {!imageSrc && (
+                    <div className="text-center bg-white p-6 rounded-lg shadow-lg max-w-md w-full">
+                        <div className="mb-4">
+                            <svg
+                                className="mx-auto h-12 w-12 text-blue-500"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
                             >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={() => {
-                                    if (!exportFilename.trim()) {
-                                        alert("Please enter a valid filename");
-                                        return;
-                                    }
-                                    exportAll(exportFilename.trim());
-                                    setShowExportModal(false);
-                                }}
-                                style={{
-                                    padding: "6px 12px",
-                                    backgroundColor: "#2e86de",
-                                    color: "white",
-                                    border: "none",
-                                    cursor: "pointer",
-                                }}
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth="2"
+                                    d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l-4-4m4 4l4-4"
+                                />
+                            </svg>
+                        </div>
+                        <h2 className="text-xl font-semibold text-gray-900 mb-2">
+                            Upload Floorplan
+                        </h2>
+                        <p className="text-gray-600 mb-4">
+                            Upload a building layout or floorplan to start adding markers
+                        </p>
+                        <div className="border-2 border-dashed border-gray-300 rounded-lg p-6">
+                            <input
+                                type="file"
+                                accept="image/png,image/jpeg,application/json"
+                                onChange={handleImageUpload}
+                                className="hidden"
+                                id="fileInput"
+                            />
+                            <label
+                                htmlFor="fileInput"
+                                className="cursor-pointer text-gray-500 hover:text-gray-700"
                             >
-                                Export
-                            </button>
+                                Tap to select file or drag & drop
+                                <br />
+                                <span className="text-sm text-gray-400">
+                                    PNG, JPG, PDF supported
+                                </span>
+                            </label>
+                        </div>
+                        <div className="mt-6 text-gray-500">
+                            <svg
+                                className="mx-auto h-6 w-6 text-gray-400"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth="2"
+                                    d="M19 14l-7 7m0 0l-7-7m7 7V3"
+                                />
+                            </svg>
+                            <p className="text-sm">No projects yet</p>
+                            <p className="text-sm">Upload a floorplan to get started</p>
                         </div>
                     </div>
-                </div>
-            )}
+                )}
+
+                {imageSrc && (
+                    <div className="p-5 max-w-7xl mx-auto">
+                        <div className="flex items-center gap-2 mb-4 flex-wrap">
+                            <input
+                                type="file"
+                                accept="image/png,image/jpeg,application/json"
+                                onChange={handleImageUpload}
+                                className="file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                            />
+                            <button
+                                onClick={() => setShowExportModal(true)}
+                                disabled={!imageSrc}
+                                className="py-2 px-4 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                                aria-label="Export JSON + PNG"
+                            >
+                                Export JSON + PNG
+                            </button>
+                        </div>
+
+                        <div className="mb-4">
+                            <strong className="text-lg text-gray-700">
+                                Select Marker Type:
+                            </strong>
+                            <div className="flex gap-2 mt-2">
+                                {MARKER_TYPES.map(({ type, emoji }) => (
+                                    <button
+                                        key={type}
+                                        onClick={() =>
+                                            setSelectedType((cur) =>
+                                                cur === type ? null : type
+                                            )
+                                        }
+                                        className={`text-2xl p-2 rounded ${selectedType === type
+                                                ? "bg-blue-600 text-white"
+                                                : "bg-gray-200 text-black"
+                                            } hover:bg-blue-500 hover:text-white transition-colors`}
+                                    >
+                                        {emoji}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div
+                            ref={containerRef}
+                            onClick={handleImageClick}
+                            className="relative inline-block border-2 border-gray-800 max-w-full"
+                        >
+                            <img
+                                src={imageSrc}
+                                alt="Floorplan"
+                                className="block w-full h-auto"
+                                draggable={false}
+                            />
+                            {markers.map(({ id, type, x, y }) => {
+                                const emoji =
+                                    MARKER_TYPES.find((m) => m.type === type)?.emoji ||
+                                    "❓";
+                                return (
+                                    <div
+                                        key={id}
+                                        draggable
+                                        onDrag={(e) => e.preventDefault()}
+                                        onDragStart={(e) => {
+                                            e.dataTransfer.setData("text/plain", id);
+                                        }}
+                                        onDragEnd={(e) =>
+                                            dragMarker(id, e.clientX, e.clientY)
+                                        }
+                                        className="absolute text-3xl cursor-grab select-none"
+                                        style={{
+                                            left: `${x * 100}%`,
+                                            top: `${y * 100}%`,
+                                            transform: "translate(-50%, -50%)",
+                                        }}
+                                        title={type}
+                                    >
+                                        {emoji}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+
+                {showExportModal && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                        <div className="bg-white p-5 rounded-lg w-80 shadow-xl flex flex-col gap-3">
+                            <label
+                                htmlFor="filenameInput"
+                                className="font-bold text-gray-700"
+                            >
+                                Enter filename:
+                            </label>
+                            <input
+                                id="filenameInput"
+                                type="text"
+                                value={exportFilename}
+                                onChange={(e) => setExportFilename(e.target.value)}
+                                autoFocus
+                                className="p-2 border rounded text-lg"
+                            />
+                            <div className="flex justify-end gap-2">
+                                <button
+                                    onClick={() => setShowExportModal(false)}
+                                    className="py-2 px-4 bg-gray-200 rounded hover:bg-gray-300"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        if (!exportFilename.trim()) {
+                                            alert("Please enter a valid filename");
+                                            return;
+                                        }
+                                        exportAll(exportFilename.trim());
+                                        setShowExportModal(false);
+                                    }}
+                                    className="py-2 px-4 bg-blue-600 text-white rounded hover:bg-blue-700"
+                                >
+                                    Export
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </main>
         </div>
     );
 }
+
+export default App;
