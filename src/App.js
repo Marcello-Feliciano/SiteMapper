@@ -1,4 +1,4 @@
-﻿import React, { useState, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import html2canvas from 'html2canvas';
 
 const MARKER_TYPES = [
@@ -254,10 +254,11 @@ function App() {
                                                 cur === type ? null : type
                                             )
                                         }
-                                        className={`text-2xl p-2 rounded ${selectedType === type
+                                        className={`text-2xl p-2 rounded ${
+                                            selectedType === type
                                                 ? "bg-blue-600 text-white"
                                                 : "bg-gray-200 text-black"
-                                            } hover:bg-blue-500 hover:text-white transition-colors`}
+                                        } hover:bg-blue-500 hover:text-white transition-colors`}
                                     >
                                         {emoji}
                                     </button>
