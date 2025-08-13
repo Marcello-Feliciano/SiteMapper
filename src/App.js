@@ -37,7 +37,7 @@ export default function App() {
   const [exportFilename, setExportFilename] = useState("layout");
 
   // --- Drag state ---
-  const dragState = useRef({ active: false, id: null, startX: 0, startY: 0 });
+  const dragState = useRef({ active: false, id: null, offsetX: 0, offsetY: 0 });
 
   // -------------- Helpers --------------
 
@@ -199,14 +199,19 @@ export default function App() {
   };
 
   const startDrag = (id, e) => {
+    if (!imgRef.current) return;
     e.stopPropagation();
-    e.preventDefault(); // Prevent default click behavior
+    e.preventDefault();
+    const markerDiv = e.target.closest('[data-marker-id]');
+    if (!markerDiv) return;
+
     const rect = imgRef.current.getBoundingClientRect();
+    const markerRect = markerDiv.getBoundingClientRect();
     dragState.current = {
       active: true,
       id,
-      startX: e.clientX - (rect.width * placed.find((m) => m.id === id).x),
-      startY: e.clientY - (rect.height * placed.find((m) => m.id === id).y),
+      offsetX: e.clientX - markerRect.left,
+      offsetY: e.clientY - markerRect.top,
     };
   };
 
@@ -214,20 +219,23 @@ export default function App() {
     if (!dragState.current.active || !imgRef.current) return;
 
     const rect = imgRef.current.getBoundingClientRect();
-    const newX = (e.clientX - dragState.current.startX) / rect.width;
-    const newY = (e.clientY - dragState.current.startY) / rect.height;
-    const x = Math.max(0, Math.min(1, newX));
-    const y = Math.max(0, Math.min(1, newY));
+    const x = (e.clientX - dragState.current.offsetX) / rect.width;
+    const y = (e.clientY - dragState.current.offsetY) / rect.height;
+    const clampedX = Math.max(0, Math.min(1, x));
+    const clampedY = Math.max(0, Math.min(1, y));
 
     setPlaced((list) =>
       list.map((m) =>
-        m.id === dragState.current.id ? { ...m, x, y } : m
+        m.id === dragState.current.id ? { ...m, x: clampedX, y: clampedY } : m
       )
     );
   };
 
   const endDrag = (e) => {
-    dragState.current = { active: false, id: null, startX: 0, startY: 0 };
+    if (dragState.current.active) {
+      e.preventDefault(); // Prevent click event after drag
+      dragState.current = { active: false, id: null, offsetX: 0, offsetY: 0 };
+    }
   };
 
   const removeMarker = (id) => {
@@ -357,7 +365,7 @@ export default function App() {
       {/* Main content */}
       <main style={{ padding: 16, display: "flex", justifyContent: "center" }}>
         {!imageSrc ? (
-          <div style={{ textAlign: "center", marginTop: 64 }}>
+          <div style={{ textAlign: "center", marginTop: 48 }}>
             {/* Upload card */}
             <div
               onClick={handleImportClick}
@@ -415,7 +423,7 @@ export default function App() {
               padding: 8,
               maxWidth: "min(95vw, 1200px)",
               overflow: "auto",
-              touchAction: "none", // Prevent default touch behavior
+              touchAction: "none",
             }}
           >
             <img
@@ -441,14 +449,14 @@ export default function App() {
                 <img
                   src={type.iconSrc}
                   alt={type?.label || "icon"}
-                  style={{ width: 64, height: 64, objectFit: "contain" }} // Increased to 48x48px
+                  style={{ width: 48, height: 48, objectFit: "contain" }}
                 />
               ) : null;
 
               return (
                 <div
                   key={m.id}
-                  data-marker-id={m.id} // Add data attribute for drag detection
+                  data-marker-id={m.id}
                   onDoubleClick={() => removeMarker(m.id)}
                   style={{
                     position: "absolute",
@@ -459,9 +467,9 @@ export default function App() {
                     userSelect: "none",
                     touchAction: "none",
                     background: "rgba(255,255,255,0.7)",
-                    borderRadius: 12, // Larger radius for bigger icons
-                    padding: 6, // Increased padding
-                    boxShadow: "0 4px 8px rgba(0,0,0,.15)", // Slightly stronger shadow
+                    borderRadius: 12,
+                    padding: 6,
+                    boxShadow: "0 4px 8px rgba(0,0,0,.15)",
                   }}
                   title="Drag to move • Double-click to delete"
                 >
@@ -493,7 +501,7 @@ export default function App() {
               width: 360,
               background: "#fff",
               borderRadius: 14,
-              boxShadow: "0 16px 64px rgba(16,24,40,.2)",
+              boxShadow: "0 16px 48px rgba(16,24,40,.2)",
               padding: 18,
               display: "flex",
               flexDirection: "column",
