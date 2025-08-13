@@ -17,13 +17,13 @@ export default function App() {
 
   // --- Marker palette + selection ---
   const markerTypes = [
-    { id: "camera", label: "Camera", iconSrc: cameraIcon },
-    { id: "door", label: "Door", iconSrc: doorIcon },
-    { id: "cardreader", label: "Card", iconSrc: cardIcon },
-    { id: "tv", label: "TV", iconSrc: tvIcon },
-    { id: "wifi", label: "Wi-Fi", iconSrc: wifiIcon },
-    { id: "projector", label: "Proj", iconSrc: projectorIcon },
-  ];
+  { id: "camera", label: "Camera", iconSrc: require('./assets/camera.png') },
+  { id: "door", label: "Door", iconSrc: require('./assets/door.png') },
+  { id: "cardreader", label: "Card", iconSrc: require('./assets/card.png') },
+  { id: "tv", label: "TV", iconSrc: require('./assets/tv.png') },
+  { id: "wifi", label: "Wi-Fi", iconSrc: require('./assets/wifi.png') },
+  { id: "projector", label: "Proj", iconSrc: require('./assets/projector.png') },
+];
   const [selectedTypeId, setSelectedTypeId] = useState(null);
 
   // --- Placed markers (normalized coords 0..1) ---
