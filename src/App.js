@@ -449,7 +449,7 @@ export default function App() {
                 <img
                   src={type.iconSrc}
                   alt={type?.label || "icon"}
-                  style={{ width: 48, height: 48, objectFit: "contain" }}
+                  style={{ width: 64, height: 64, objectFit: "contain" }}
                 />
               ) : null;
 
@@ -501,7 +501,7 @@ export default function App() {
               width: 360,
               background: "#fff",
               borderRadius: 14,
-              boxShadow: "0 16px 48px rgba(16,24,40,.2)",
+              boxShadow: "0 16px 64px rgba(16,24,40,.2)",
               padding: 18,
               display: "flex",
               flexDirection: "column",
