@@ -177,63 +177,75 @@ export default function App() {
 
   // -------------- Placement + dragging --------------
 
-  const handleStageClick = (e) => {
-    const selected = getSelectedType();
-    if (!selected || !imgRef.current) return;
+  // ... (keep existing imports and state declarations)
 
-    const rect = imgRef.current.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / rect.width;
-    const y = (e.clientY - rect.top) / rect.height;
-    if (x < 0 || x > 1 || y < 0 || y > 1) return;
+// -------------- Placement + dragging --------------
 
-    if (!e.buttons) { // Only place new marker on click (no button held)
-      setPlaced((list) => [
-        ...list,
-        {
-          id: crypto.randomUUID(),
-          typeId: selected.id,
-          x,
-          y,
-          iconSrc: selected.iconSrc,
-        },
-      ]);
-    }
-  };
+const handleStageClick = (e) => {
+  const selected = getSelectedType();
+  if (!selected || !imgRef.current) return;
 
-  // drag state
-  const dragState = useRef({ id: null });
+  const rect = imgRef.current.getBoundingClientRect();
+  const x = (e.clientX - rect.left) / rect.width;
+  const y = (e.clientY - rect.top) / rect.height;
+  if (x < 0 || x > 1 || y < 0 || y > 1) return;
 
-  const startDrag = (id, e) => {
-    e.stopPropagation();
-    dragState.current.id = id;
-    stageRef.current?.setPointerCapture?.(e.pointerId);
-  };
+  // Only place a new marker on a single click (no dragging)
+  if (e.type === 'click' && !e.buttons) {
+    setPlaced((list) => [
+      ...list,
+      {
+        id: crypto.randomUUID(),
+        typeId: selected.id,
+        x,
+        y,
+        iconSrc: selected.iconSrc,
+      },
+    ]);
+  }
+};
 
-  const onPointerMove = (e) => {
-    const draggingId = dragState.current.id;
-    if (!draggingId || !imgRef.current) return;
+const dragState = useRef({ id: null, startX: 0, startY: 0 });
 
-    const rect = imgRef.current.getBoundingClientRect();
-    let x = (e.clientX - rect.left) / rect.width;
-    let y = (e.clientY - rect.top) / rect.height;
-    x = Math.max(0, Math.min(1, x));
-    y = Math.max(0, Math.min(1, y));
+const startDrag = (id, e) => {
+  e.stopPropagation();
+  dragState.current = { id, startX: e.clientX, startY: e.clientY };
+  stageRef.current?.setPointerCapture?.(e.pointerId);
+};
 
-    setPlaced((list) => list.map((m) => (m.id === draggingId ? { ...m, x, y } : m)));
-  };
+const onPointerMove = (e) => {
+  const { id, startX, startY } = dragState.current;
+  if (!id || !imgRef.current) return;
 
-  const endDrag = (e) => {
-    if (dragState.current.id && stageRef.current?.releasePointerCapture) {
-      try {
-        stageRef.current.releasePointerCapture(e.pointerId);
-      } catch {}
-    }
-    dragState.current.id = null;
-  };
+  const rect = imgRef.current.getBoundingClientRect();
+  const dx = e.clientX - startX;
+  const dy = e.clientY - startY;
+  const marker = placed.find((m) => m.id === id);
+  if (!marker) return;
 
-  const removeMarker = (id) => {
-    setPlaced((list) => list.filter((m) => m.id !== id));
-  };
+  let x = marker.x + (dx / rect.width);
+  let y = marker.y + (dy / rect.height);
+  x = Math.max(0, Math.min(1, x));
+  y = Math.max(0, Math.min(1, y));
+
+  setPlaced((list) => list.map((m) => (m.id === id ? { ...m, x, y } : m)));
+  dragState.current = { id, startX: e.clientX, startY: e.clientY }; // Update start position
+};
+
+const endDrag = (e) => {
+  if (dragState.current.id && stageRef.current?.releasePointerCapture) {
+    try {
+      stageRef.current.releasePointerCapture(e.pointerId);
+    } catch {}
+  }
+  dragState.current = { id: null, startX: 0, startY: 0 };
+};
+
+const removeMarker = (id) => {
+  setPlaced((list) => list.filter((m) => m.id !== id));
+};
+
+// ... (keep the rest of the UI and other functions unchanged)
 
   // -------------- UI --------------
 
@@ -398,22 +410,22 @@ export default function App() {
           </div>
         ) : (
           <div
-            ref={stageRef}
-            onClick={handleStageClick}
-            onPointerMove={onPointerMove}
-            onPointerUp={endDrag}
-            onPointerCancel={endDrag}
-            style={{
-              position: "relative",
-              background: "#fff",
-              border: "1px solid #e2e8f0",
-              borderRadius: 12,
-              boxShadow: "0 8px 24px rgba(16,24,40,.06)",
-              padding: 8,
-              maxWidth: "min(95vw, 1200px)",
-              overflow: "auto",
-            }}
-          >
+              ref={stageRef}
+              onClick={handleStageClick} // Added for explicit click handling
+              onPointerMove={onPointerMove}
+              onPointerUp={endDrag}
+              onPointerCancel={endDrag}
+              style={{
+                position: "relative",
+                background: "#fff",
+                border: "1px solid #e2e8f0",
+                borderRadius: 12,
+                boxShadow: "0 8px 24px rgba(16,24,40,.06)",
+                padding: 8,
+                maxWidth: "min(95vw, 1200px)",
+                overflow: "auto",
+              }}
+            >
             <img
               id="floorplan-image"
               ref={imgRef}
