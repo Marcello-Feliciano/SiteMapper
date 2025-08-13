@@ -357,7 +357,7 @@ export default function App() {
       {/* Main content */}
       <main style={{ padding: 16, display: "flex", justifyContent: "center" }}>
         {!imageSrc ? (
-          <div style={{ textAlign: "center", marginTop: 48 }}>
+          <div style={{ textAlign: "center", marginTop: 64 }}>
             {/* Upload card */}
             <div
               onClick={handleImportClick}
@@ -441,7 +441,7 @@ export default function App() {
                 <img
                   src={type.iconSrc}
                   alt={type?.label || "icon"}
-                  style={{ width: 48, height: 48, objectFit: "contain" }} // Increased to 48x48px
+                  style={{ width: 64, height: 64, objectFit: "contain" }} // Increased to 48x48px
                 />
               ) : null;
 
@@ -493,7 +493,7 @@ export default function App() {
               width: 360,
               background: "#fff",
               borderRadius: 14,
-              boxShadow: "0 16px 48px rgba(16,24,40,.2)",
+              boxShadow: "0 16px 64px rgba(16,24,40,.2)",
               padding: 18,
               display: "flex",
               flexDirection: "column",
