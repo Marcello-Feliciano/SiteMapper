@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect } from "react";
 import html2canvas from "html2canvas";
 
-// Import fixed icon images (assuming they are in src/assets/)
+// Import fixed icon images (place these in src/assets/)
 import cameraIcon from './assets/camera.png';
 import doorIcon from './assets/door.png';
 import wifiIcon from './assets/wifi.png';
@@ -181,14 +181,12 @@ export default function App() {
     const selected = getSelectedType();
     if (!selected || !imgRef.current) return;
 
-    // Check if click is intended for placement (not dragging)
     const rect = imgRef.current.getBoundingClientRect();
     const x = (e.clientX - rect.left) / rect.width;
     const y = (e.clientY - rect.top) / rect.height;
     if (x < 0 || x > 1 || y < 0 || y > 1) return;
 
-    // Only place a new marker if not dragging
-    if (!e.buttons) { // e.buttons === 0 means no mouse button is pressed (just a click)
+    if (!e.buttons) { // Only place new marker on click (no button held)
       setPlaced((list) => [
         ...list,
         {
