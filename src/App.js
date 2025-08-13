@@ -1,6 +1,14 @@
 import React, { useRef, useState, useEffect } from "react";
 import html2canvas from "html2canvas";
 
+// Import fixed icon images (assuming they are in src/assets/)
+import cameraIcon from './assets/camera.png';
+import doorIcon from './assets/door.png';
+import wifiIcon from './assets/wifi.png';
+import tvIcon from './assets/tv.png';
+import projectorIcon from './assets/projector.png';
+import cardIcon from './assets/card.png';
+
 export default function App() {
   // --- Image + layout state ---
   const [imageSrc, setImageSrc] = useState(null); // dataURL of uploaded image
@@ -9,21 +17,20 @@ export default function App() {
 
   // --- Marker palette + selection ---
   const [markerTypes, setMarkerTypes] = useState([
-    { id: "camera", label: "Camera", emoji: "📷" },
-    { id: "door", label: "Door", emoji: "🚪" },
-    { id: "cardreader", label: "Card", emoji: "💳" },
-    { id: "tv", label: "TV", emoji: "📺" },
-    { id: "wifi", label: "Wi-Fi", emoji: "📶" },
-    { id: "projector", label: "Proj", emoji: "📽️" },
+    { id: "camera", label: "Camera", iconSrc: cameraIcon },
+    { id: "door", label: "Door", iconSrc: doorIcon },
+    { id: "cardreader", label: "Card", iconSrc: cardIcon },
+    { id: "tv", label: "TV", iconSrc: tvIcon },
+    { id: "wifi", label: "Wi-Fi", iconSrc: wifiIcon },
+    { id: "projector", label: "Proj", iconSrc: projectorIcon },
   ]);
   const [selectedTypeId, setSelectedTypeId] = useState(null);
 
   // --- Placed markers (normalized coords 0..1) ---
-  const [placed, setPlaced] = useState([]); // {id, typeId, x, y, iconSrc?, emoji?}
+  const [placed, setPlaced] = useState([]); // {id, typeId, x, y, iconSrc}
 
   // --- File inputs ---
   const importInputRef = useRef(null);
-  const addIconInputRef = useRef(null);
 
   // --- Export filename modal ---
   const [showExportModal, setShowExportModal] = useState(false);
@@ -68,7 +75,6 @@ export default function App() {
     if (!file) return;
 
     if (file.type === "application/json") {
-      // Import our JSON format
       try {
         const text = await file.text();
         const data = JSON.parse(text);
@@ -80,8 +86,7 @@ export default function App() {
             typeId: m.typeId,
             x: m.x,
             y: m.y,
-            emoji: m.emoji, // legacy support
-            iconSrc: m.iconSrc, // custom icons
+            iconSrc: markerTypes.find((t) => t.id === m.typeId)?.iconSrc, // Map to fixed icons
           }))
         );
       } catch (err) {
@@ -90,14 +95,11 @@ export default function App() {
     } else if (file.type.startsWith("image/")) {
       const dataURL = await readFileAsDataURL(file);
       setImageSrc(dataURL);
-      // keep markers? (Your earlier flow cleared markers on new image.)
-      // If you prefer to clear, uncomment next line:
-      // setPlaced([]);
+      setPlaced([]); // Clear markers on new image
     } else {
       alert("Unsupported file type. Use PNG/JPG or a saved JSON.");
     }
 
-    // reset input so the same file can be chosen again later
     e.target.value = "";
   };
 
@@ -124,8 +126,7 @@ export default function App() {
         typeId: m.typeId,
         x: m.x,
         y: m.y,
-        emoji: m.emoji || undefined,
-        iconSrc: m.iconSrc || undefined,
+        iconSrc: m.iconSrc, // Include fixed icon data
       })),
     };
     const jsonBlob = new Blob([JSON.stringify(json, null, 2)], { type: "application/json" });
@@ -145,15 +146,13 @@ export default function App() {
 
     const scaleX = naturalW / Math.max(1, displayedW);
     const scaleY = naturalH / Math.max(1, displayedH);
-    const scale = Math.max(scaleX, scaleY); // keep aspect; html2canvas uses uniform scale
+    const scale = Math.max(scaleX, scaleY);
 
     const canvas = await html2canvas(stageRef.current, {
       useCORS: true,
       backgroundColor: null,
       scale,
-      // Large elements may exceed viewport; this is fine, html2canvas captures full node
       onclone: (clonedDoc) => {
-        // Ensure cloned image retains its size constraints
         const clonedImg = clonedDoc.getElementById("floorplan-image");
         if (clonedImg) {
           clonedImg.style.width = `${displayedW}px`;
@@ -176,43 +175,31 @@ export default function App() {
     setSelectedTypeId((cur) => (cur === typeId ? null : typeId));
   };
 
-  const handleAddCustomIcon = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      alert("Please select an image file for a custom icon (PNG/SVG/JPG).");
-      e.target.value = "";
-      return;
-    }
-    const dataURL = await readFileAsDataURL(file);
-    const newId = `icon_${Date.now()}`;
-    setMarkerTypes((prev) => [...prev, { id: newId, label: file.name.replace(/\.[^.]+$/, ""), iconSrc: dataURL }]);
-    setSelectedTypeId(newId);
-    e.target.value = "";
-  };
-
   // -------------- Placement + dragging --------------
 
   const handleStageClick = (e) => {
     const selected = getSelectedType();
     if (!selected || !imgRef.current) return;
 
+    // Check if click is intended for placement (not dragging)
     const rect = imgRef.current.getBoundingClientRect();
     const x = (e.clientX - rect.left) / rect.width;
     const y = (e.clientY - rect.top) / rect.height;
     if (x < 0 || x > 1 || y < 0 || y > 1) return;
 
-    setPlaced((list) => [
-      ...list,
-      {
-        id: crypto.randomUUID(),
-        typeId: selected.id,
-        x,
-        y,
-        emoji: selected.emoji,
-        iconSrc: selected.iconSrc,
-      },
-    ]);
+    // Only place a new marker if not dragging
+    if (!e.buttons) { // e.buttons === 0 means no mouse button is pressed (just a click)
+      setPlaced((list) => [
+        ...list,
+        {
+          id: crypto.randomUUID(),
+          typeId: selected.id,
+          x,
+          y,
+          iconSrc: selected.iconSrc,
+        },
+      ]);
+    }
   };
 
   // drag state
@@ -221,7 +208,6 @@ export default function App() {
   const startDrag = (id, e) => {
     e.stopPropagation();
     dragState.current.id = id;
-    // capture pointer events to the stage
     stageRef.current?.setPointerCapture?.(e.pointerId);
   };
 
@@ -348,37 +334,12 @@ export default function App() {
                 userSelect: "none",
               }}
             >
-              {m.iconSrc ? (
+              {m.iconSrc && (
                 <img src={m.iconSrc} alt={m.label} style={{ width: 22, height: 22 }} />
-              ) : (
-                m.emoji || "❓"
               )}
             </button>
           );
         })}
-        <button
-          onClick={() => addIconInputRef.current?.click()}
-          title="Add custom icon"
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: 10,
-            border: "1px dashed #9db3d5",
-            background: "#fff",
-            cursor: "pointer",
-            fontSize: 20,
-            color: "#5a78a8",
-          }}
-        >
-          +
-        </button>
-        <input
-          ref={addIconInputRef}
-          type="file"
-          accept="image/png,image/svg+xml,image/jpeg"
-          onChange={handleAddCustomIcon}
-          style={{ display: "none" }}
-        />
         {selectedTypeId && (
           <button
             onClick={() => setSelectedTypeId(null)}
@@ -474,15 +435,13 @@ export default function App() {
             {/* Markers layer */}
             {placed.map((m) => {
               const type = markerTypes.find((t) => t.id === m.typeId);
-              const content = m.iconSrc || type?.iconSrc ? (
+              const content = type?.iconSrc ? (
                 <img
-                  src={m.iconSrc || type?.iconSrc}
+                  src={type.iconSrc}
                   alt={type?.label || "icon"}
                   style={{ width: 28, height: 28 }}
                 />
-              ) : (
-                <span style={{ fontSize: 26, lineHeight: 1 }}>{m.emoji || type?.emoji || "❓"}</span>
-              );
+              ) : null;
 
               return (
                 <div
