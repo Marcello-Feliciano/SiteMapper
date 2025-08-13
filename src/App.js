@@ -1,139 +1,136 @@
-import React, { useState, useRef } from "react";
+import React, { useRef, useState, useEffect } from "react";
 
-export default function App() {
+function App() {
   const [image, setImage] = useState(null);
-  const fileInputRef = useRef();
+  const [markers, setMarkers] = useState([]);
+  const [selectedIcon, setSelectedIcon] = useState(null);
+  const canvasRef = useRef(null);
+  const fileInputRef = useRef(null);
 
-  const handleFileChange = (e) => {
+  // Load image or JSON from file input
+  const handleImport = (e) => {
     const file = e.target.files[0];
-    if (file && (file.type.includes("image") || file.type.includes("pdf"))) {
-      const reader = new FileReader();
-      reader.onload = (event) => setImage(event.target.result);
+    if (!file) return;
+
+    const reader = new FileReader();
+
+    if (file.type === "application/json") {
+      reader.onload = (event) => {
+        const jsonData = JSON.parse(event.target.result);
+        setImage(jsonData.image);
+        setMarkers(jsonData.markers || []);
+      };
+      reader.readAsText(file);
+    } else if (file.type.startsWith("image/")) {
+      reader.onload = (event) => {
+        setImage(event.target.result);
+        setMarkers([]);
+      };
       reader.readAsDataURL(file);
     }
   };
 
-  const handleDrop = (e) => {
-    e.preventDefault();
-    const file = e.dataTransfer.files[0];
-    if (file && (file.type.includes("image") || file.type.includes("pdf"))) {
-      const reader = new FileReader();
-      reader.onload = (event) => setImage(event.target.result);
-      reader.readAsDataURL(file);
-    }
+  // Add marker to click position
+  const handleCanvasClick = (e) => {
+    if (!selectedIcon) return;
+
+    const rect = canvasRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    setMarkers([...markers, { type: selectedIcon, x, y }]);
   };
 
-  const handleDragOver = (e) => {
-    e.preventDefault();
+  // Handle selecting/deselecting icons
+  const toggleIconSelection = (icon) => {
+    setSelectedIcon((prev) => (prev === icon ? null : icon));
+  };
+
+  // Export JSON & PNG together
+  const handleExport = () => {
+    if (!image) return;
+
+    // Export JSON
+    const jsonData = {
+      image,
+      markers,
+    };
+    const jsonBlob = new Blob([JSON.stringify(jsonData)], {
+      type: "application/json",
+    });
+    const jsonUrl = URL.createObjectURL(jsonBlob);
+    const jsonLink = document.createElement("a");
+    jsonLink.href = jsonUrl;
+    jsonLink.download = "layout.json";
+    jsonLink.click();
+    URL.revokeObjectURL(jsonUrl);
+
+    // Export PNG
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+
+    const img = new Image();
+    img.src = image;
+    img.onload = () => {
+      canvas.width = img.width;
+      canvas.height = img.height;
+      ctx.drawImage(img, 0, 0);
+
+      markers.forEach((marker) => {
+        ctx.fillStyle = "red";
+        ctx.beginPath();
+        ctx.arc(marker.x, marker.y, 5, 0, 2 * Math.PI);
+        ctx.fill();
+      });
+
+      const pngUrl = canvas.toDataURL("image/png");
+      const pngLink = document.createElement("a");
+      pngLink.href = pngUrl;
+      pngLink.download = "layout.png";
+      pngLink.click();
+    };
   };
 
   return (
-    <div style={{ fontFamily: "Arial, sans-serif", background: "#f8f9fa", height: "100vh" }}>
-      {/* Top Bar */}
-      <div
-        style={{
-          background: "#1976d2",
-          color: "white",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "0 20px",
-          height: "56px",
-          boxShadow: "0 2px 5px rgba(0,0,0,0.1)"
-        }}
-      >
-        <div style={{ fontSize: "18px", fontWeight: "bold" }}>JobSite Marker</div>
-        <button
-          onClick={() => fileInputRef.current.click()}
-          style={{
-            background: "white",
-            color: "#1976d2",
-            border: "none",
-            borderRadius: "6px",
-            padding: "6px 16px",
-            fontWeight: "bold",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            gap: "6px"
-          }}
-        >
-          ⬆ Import
-        </button>
-        <input
-          type="file"
-          accept="image/*,.pdf"
-          ref={fileInputRef}
-          style={{ display: "none" }}
-          onChange={handleFileChange}
-        />
+    <div style={{ padding: "10px" }}>
+      {/* Import Button */}
+      <input
+        type="file"
+        accept=".png, .jpg, .jpeg, .json"
+        ref={fileInputRef}
+        onChange={handleImport}
+      />
+
+      {/* Export Button directly under Import */}
+      <div style={{ marginTop: "10px" }}>
+        <button onClick={handleExport}>Export JSON & PNG</button>
       </div>
 
-      {/* Main Content */}
-      <div style={{ display: "flex", justifyContent: "center", marginTop: "40px" }}>
-        {!image ? (
-          <div style={{ textAlign: "center" }}>
-            {/* Upload Card */}
-            <div
-              onDrop={handleDrop}
-              onDragOver={handleDragOver}
-              style={{
-                background: "white",
-                borderRadius: "8px",
-                padding: "30px",
-                width: "350px",
-                boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-                marginBottom: "30px"
-              }}
-            >
-              <div style={{ fontSize: "40px", color: "#1976d2" }}>☁️</div>
-              <h3>Upload Floorplan</h3>
-              <p style={{ color: "#666", fontSize: "14px" }}>
-                Upload a building layout or floorplan to start adding markers
-              </p>
-              <div
-                onClick={() => fileInputRef.current.click()}
-                style={{
-                  border: "2px dashed #ccc",
-                  borderRadius: "6px",
-                  padding: "20px",
-                  cursor: "pointer",
-                  marginTop: "10px",
-                  color: "#777",
-                  fontSize: "14px"
-                }}
-              >
-                📄 Tap to select file or drag & drop
-                <br />
-                <span style={{ fontSize: "12px" }}>PNG, JPG, PDF supported</span>
-              </div>
-            </div>
+      {/* Icon Toolbar */}
+      <div style={{ marginTop: "10px" }}>
+        {["📷", "🔒", "📡", "💡"].map((icon) => (
+          <button
+            key={icon}
+            style={{
+              background: selectedIcon === icon ? "lightblue" : "white",
+            }}
+            onClick={() => toggleIconSelection(icon)}
+          >
+            {icon}
+          </button>
+        ))}
+      </div>
 
-            {/* No Projects Message */}
-            <div style={{ color: "#888", fontSize: "14px" }}>
-              <div style={{ fontSize: "30px" }}>🏢</div>
-              No projects yet
-              <br />
-              <span style={{ fontSize: "12px" }}>
-                Upload a floorplan to get started
-              </span>
-            </div>
-          </div>
-        ) : (
-          // Show uploaded image
-          <div style={{ maxWidth: "90%", maxHeight: "80vh" }}>
-            {image.endsWith(".pdf") ? (
-              <p style={{ color: "#555" }}>PDF preview not supported, file uploaded successfully.</p>
-            ) : (
-              <img
-                src={image}
-                alt="Uploaded Floorplan"
-                style={{ maxWidth: "100%", borderRadius: "8px", boxShadow: "0 2px 8px rgba(0,0,0,0.1)" }}
-              />
-            )}
-          </div>
-        )}
+      {/* Canvas */}
+      <div style={{ marginTop: "10px" }}>
+        <canvas
+          ref={canvasRef}
+          onClick={handleCanvasClick}
+          style={{ border: "1px solid black" }}
+        />
       </div>
     </div>
   );
 }
+
+export default App;
