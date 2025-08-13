@@ -1,7 +1,7 @@
-import React, { useRef, useState, useEffect } from "react";
+import React, { useRef, useState } from "react";
 import html2canvas from "html2canvas";
 
-// Import fixed icon images (place these in src/assets/)
+// Import fixed icon images (place these in src/assets/ and resize to 128x128px)
 import cameraIcon from './assets/camera.png';
 import doorIcon from './assets/door.png';
 import wifiIcon from './assets/wifi.png';
@@ -16,14 +16,14 @@ export default function App() {
   const stageRef = useRef(null);
 
   // --- Marker palette + selection ---
-  const [markerTypes, setMarkerTypes] = useState([
+  const markerTypes = [
     { id: "camera", label: "Camera", iconSrc: cameraIcon },
     { id: "door", label: "Door", iconSrc: doorIcon },
     { id: "cardreader", label: "Card", iconSrc: cardIcon },
     { id: "tv", label: "TV", iconSrc: tvIcon },
     { id: "wifi", label: "Wi-Fi", iconSrc: wifiIcon },
     { id: "projector", label: "Proj", iconSrc: projectorIcon },
-  ]);
+  ];
   const [selectedTypeId, setSelectedTypeId] = useState(null);
 
   // --- Placed markers (normalized coords 0..1) ---
@@ -35,6 +35,10 @@ export default function App() {
   // --- Export filename modal ---
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportFilename, setExportFilename] = useState("layout");
+
+  // --- Drag state ---
+  const [draggingId, setDraggingId] = useState(null);
+  const dragStart = useRef({ x: 0, y: 0 });
 
   // -------------- Helpers --------------
 
@@ -86,7 +90,7 @@ export default function App() {
             typeId: m.typeId,
             x: m.x,
             y: m.y,
-            iconSrc: markerTypes.find((t) => t.id === m.typeId)?.iconSrc, // Map to fixed icons
+            iconSrc: markerTypes.find((t) => t.id === m.typeId)?.iconSrc,
           }))
         );
       } catch (err) {
@@ -95,7 +99,7 @@ export default function App() {
     } else if (file.type.startsWith("image/")) {
       const dataURL = await readFileAsDataURL(file);
       setImageSrc(dataURL);
-      setPlaced([]); // Clear markers on new image
+      setPlaced([]);
     } else {
       alert("Unsupported file type. Use PNG/JPG or a saved JSON.");
     }
@@ -110,7 +114,6 @@ export default function App() {
 
     const safeName = (filenameBase || "layout").trim() || "layout";
 
-    // JSON (embed image + markers)
     let embeddedImage = imageSrc;
     try {
       embeddedImage = await imageToDataURL(imageSrc);
@@ -126,7 +129,7 @@ export default function App() {
         typeId: m.typeId,
         x: m.x,
         y: m.y,
-        iconSrc: m.iconSrc, // Include fixed icon data
+        iconSrc: m.iconSrc,
       })),
     };
     const jsonBlob = new Blob([JSON.stringify(json, null, 2)], { type: "application/json" });
@@ -137,7 +140,6 @@ export default function App() {
     a1.click();
     URL.revokeObjectURL(jsonUrl);
 
-    // PNG (full image, not clipped; scale up to native)
     const imgEl = imgRef.current;
     const displayedW = imgEl.clientWidth;
     const displayedH = imgEl.clientHeight;
@@ -177,21 +179,15 @@ export default function App() {
 
   // -------------- Placement + dragging --------------
 
-  // ... (keep existing imports and state declarations)
+  const handleStageClick = (e) => {
+    const selected = getSelectedType();
+    if (!selected || !imgRef.current || draggingId) return;
 
-// -------------- Placement + dragging --------------
+    const rect = imgRef.current.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width;
+    const y = (e.clientY - rect.top) / rect.height;
+    if (x < 0 || x > 1 || y < 0 || y > 1) return;
 
-const handleStageClick = (e) => {
-  const selected = getSelectedType();
-  if (!selected || !imgRef.current) return;
-
-  const rect = imgRef.current.getBoundingClientRect();
-  const x = (e.clientX - rect.left) / rect.width;
-  const y = (e.clientY - rect.top) / rect.height;
-  if (x < 0 || x > 1 || y < 0 || y > 1) return;
-
-  // Only place a new marker on a single click (no dragging)
-  if (e.type === 'click' && !e.buttons) {
     setPlaced((list) => [
       ...list,
       {
@@ -202,50 +198,40 @@ const handleStageClick = (e) => {
         iconSrc: selected.iconSrc,
       },
     ]);
-  }
-};
+  };
 
-const dragState = useRef({ id: null, startX: 0, startY: 0 });
+  const startDrag = (id, e) => {
+    e.stopPropagation();
+    setDraggingId(id);
+    dragStart.current = { x: e.clientX, y: e.clientY };
+  };
 
-const startDrag = (id, e) => {
-  e.stopPropagation();
-  dragState.current = { id, startX: e.clientX, startY: e.clientY };
-  stageRef.current?.setPointerCapture?.(e.pointerId);
-};
+  const onPointerMove = (e) => {
+    if (!draggingId || !imgRef.current) return;
 
-const onPointerMove = (e) => {
-  const { id, startX, startY } = dragState.current;
-  if (!id || !imgRef.current) return;
+    const rect = imgRef.current.getBoundingClientRect();
+    const dx = e.clientX - dragStart.current.x;
+    const dy = e.clientY - dragStart.current.y;
+    const marker = placed.find((m) => m.id === draggingId);
+    if (!marker) return;
 
-  const rect = imgRef.current.getBoundingClientRect();
-  const dx = e.clientX - startX;
-  const dy = e.clientY - startY;
-  const marker = placed.find((m) => m.id === id);
-  if (!marker) return;
+    let x = marker.x + (dx / rect.width);
+    let y = marker.y + (dy / rect.height);
+    x = Math.max(0, Math.min(1, x));
+    y = Math.max(0, Math.min(1, y));
 
-  let x = marker.x + (dx / rect.width);
-  let y = marker.y + (dy / rect.height);
-  x = Math.max(0, Math.min(1, x));
-  y = Math.max(0, Math.min(1, y));
+    setPlaced((list) => list.map((m) => (m.id === draggingId ? { ...m, x, y } : m)));
+    dragStart.current = { x: e.clientX, y: e.clientY }; // Update drag start for continuous movement
+  };
 
-  setPlaced((list) => list.map((m) => (m.id === id ? { ...m, x, y } : m)));
-  dragState.current = { id, startX: e.clientX, startY: e.clientY }; // Update start position
-};
+  const endDrag = (e) => {
+    setDraggingId(null);
+    dragStart.current = { x: 0, y: 0 };
+  };
 
-const endDrag = (e) => {
-  if (dragState.current.id && stageRef.current?.releasePointerCapture) {
-    try {
-      stageRef.current.releasePointerCapture(e.pointerId);
-    } catch {}
-  }
-  dragState.current = { id: null, startX: 0, startY: 0 };
-};
-
-const removeMarker = (id) => {
-  setPlaced((list) => list.filter((m) => m.id !== id));
-};
-
-// ... (keep the rest of the UI and other functions unchanged)
+  const removeMarker = (id) => {
+    setPlaced((list) => list.filter((m) => m.id !== id));
+  };
 
   // -------------- UI --------------
 
@@ -345,7 +331,7 @@ const removeMarker = (id) => {
               }}
             >
               {m.iconSrc && (
-                <img src={m.iconSrc} alt={m.label} style={{ width: 22, height: 22 }} />
+                <img src={m.iconSrc} alt={m.label} style={{ width: 24, height: 24 }} />
               )}
             </button>
           );
@@ -410,22 +396,22 @@ const removeMarker = (id) => {
           </div>
         ) : (
           <div
-              ref={stageRef}
-              onClick={handleStageClick} // Added for explicit click handling
-              onPointerMove={onPointerMove}
-              onPointerUp={endDrag}
-              onPointerCancel={endDrag}
-              style={{
-                position: "relative",
-                background: "#fff",
-                border: "1px solid #e2e8f0",
-                borderRadius: 12,
-                boxShadow: "0 8px 24px rgba(16,24,40,.06)",
-                padding: 8,
-                maxWidth: "min(95vw, 1200px)",
-                overflow: "auto",
-              }}
-            >
+            ref={stageRef}
+            onClick={handleStageClick}
+            onPointerMove={onPointerMove}
+            onPointerUp={endDrag}
+            onPointerCancel={endDrag}
+            style={{
+              position: "relative",
+              background: "#fff",
+              border: "1px solid #e2e8f0",
+              borderRadius: 12,
+              boxShadow: "0 8px 24px rgba(16,24,40,.06)",
+              padding: 8,
+              maxWidth: "min(95vw, 1200px)",
+              overflow: "auto",
+            }}
+          >
             <img
               id="floorplan-image"
               ref={imgRef}
@@ -449,7 +435,7 @@ const removeMarker = (id) => {
                 <img
                   src={type.iconSrc}
                   alt={type?.label || "icon"}
-                  style={{ width: 28, height: 28 }}
+                  style={{ width: 40, height: 40, objectFit: "contain" }} // Increased to 40x40px
                 />
               ) : null;
 
@@ -467,8 +453,8 @@ const removeMarker = (id) => {
                     userSelect: "none",
                     touchAction: "none",
                     background: "rgba(255,255,255,0.7)",
-                    borderRadius: 8,
-                    padding: 2,
+                    borderRadius: 10, // Slightly larger radius for bigger icons
+                    padding: 4, // Increased padding
                     boxShadow: "0 2px 6px rgba(0,0,0,.12)",
                   }}
                   title="Drag to move • Double-click to delete"
