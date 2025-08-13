@@ -37,8 +37,7 @@ export default function App() {
   const [exportFilename, setExportFilename] = useState("layout");
 
   // --- Drag state ---
-  const [draggingId, setDraggingId] = useState(null);
-  const dragStart = useRef({ x: 0, y: 0 });
+  const dragState = useRef({ active: false, id: null, startX: 0, startY: 0 });
 
   // -------------- Helpers --------------
 
@@ -180,8 +179,7 @@ export default function App() {
   // -------------- Placement + dragging --------------
 
   const handleStageClick = (e) => {
-    const selected = getSelectedType();
-    if (!selected || !imgRef.current || draggingId) return;
+    if (!getSelectedType() || !imgRef.current || dragState.current.active) return;
 
     const rect = imgRef.current.getBoundingClientRect();
     const x = (e.clientX - rect.left) / rect.width;
@@ -192,41 +190,44 @@ export default function App() {
       ...list,
       {
         id: crypto.randomUUID(),
-        typeId: selected.id,
+        typeId: getSelectedType().id,
         x,
         y,
-        iconSrc: selected.iconSrc,
+        iconSrc: getSelectedType().iconSrc,
       },
     ]);
   };
 
   const startDrag = (id, e) => {
     e.stopPropagation();
-    setDraggingId(id);
-    dragStart.current = { x: e.clientX, y: e.clientY };
+    e.preventDefault(); // Prevent default click behavior
+    const rect = imgRef.current.getBoundingClientRect();
+    dragState.current = {
+      active: true,
+      id,
+      startX: e.clientX - (rect.width * placed.find((m) => m.id === id).x),
+      startY: e.clientY - (rect.height * placed.find((m) => m.id === id).y),
+    };
   };
 
   const onPointerMove = (e) => {
-    if (!draggingId || !imgRef.current) return;
+    if (!dragState.current.active || !imgRef.current) return;
 
     const rect = imgRef.current.getBoundingClientRect();
-    const dx = e.clientX - dragStart.current.x;
-    const dy = e.clientY - dragStart.current.y;
-    const marker = placed.find((m) => m.id === draggingId);
-    if (!marker) return;
+    const newX = (e.clientX - dragState.current.startX) / rect.width;
+    const newY = (e.clientY - dragState.current.startY) / rect.height;
+    const x = Math.max(0, Math.min(1, newX));
+    const y = Math.max(0, Math.min(1, newY));
 
-    let x = marker.x + (dx / rect.width);
-    let y = marker.y + (dy / rect.height);
-    x = Math.max(0, Math.min(1, x));
-    y = Math.max(0, Math.min(1, y));
-
-    setPlaced((list) => list.map((m) => (m.id === draggingId ? { ...m, x, y } : m)));
-    dragStart.current = { x: e.clientX, y: e.clientY }; // Update drag start for continuous movement
+    setPlaced((list) =>
+      list.map((m) =>
+        m.id === dragState.current.id ? { ...m, x, y } : m
+      )
+    );
   };
 
   const endDrag = (e) => {
-    setDraggingId(null);
-    dragStart.current = { x: 0, y: 0 };
+    dragState.current = { active: false, id: null, startX: 0, startY: 0 };
   };
 
   const removeMarker = (id) => {
@@ -398,6 +399,10 @@ export default function App() {
           <div
             ref={stageRef}
             onClick={handleStageClick}
+            onPointerDown={(e) => {
+              const marker = e.target.closest('[data-marker-id]');
+              if (marker) startDrag(marker.dataset.markerId, e);
+            }}
             onPointerMove={onPointerMove}
             onPointerUp={endDrag}
             onPointerCancel={endDrag}
@@ -410,6 +415,7 @@ export default function App() {
               padding: 8,
               maxWidth: "min(95vw, 1200px)",
               overflow: "auto",
+              touchAction: "none", // Prevent default touch behavior
             }}
           >
             <img
@@ -435,14 +441,14 @@ export default function App() {
                 <img
                   src={type.iconSrc}
                   alt={type?.label || "icon"}
-                  style={{ width: 40, height: 40, objectFit: "contain" }} // Increased to 40x40px
+                  style={{ width: 48, height: 48, objectFit: "contain" }} // Increased to 48x48px
                 />
               ) : null;
 
               return (
                 <div
                   key={m.id}
-                  onPointerDown={(e) => startDrag(m.id, e)}
+                  data-marker-id={m.id} // Add data attribute for drag detection
                   onDoubleClick={() => removeMarker(m.id)}
                   style={{
                     position: "absolute",
@@ -453,9 +459,9 @@ export default function App() {
                     userSelect: "none",
                     touchAction: "none",
                     background: "rgba(255,255,255,0.7)",
-                    borderRadius: 10, // Slightly larger radius for bigger icons
-                    padding: 4, // Increased padding
-                    boxShadow: "0 2px 6px rgba(0,0,0,.12)",
+                    borderRadius: 12, // Larger radius for bigger icons
+                    padding: 6, // Increased padding
+                    boxShadow: "0 4px 8px rgba(0,0,0,.15)", // Slightly stronger shadow
                   }}
                   title="Drag to move • Double-click to delete"
                 >
