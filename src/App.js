@@ -197,15 +197,13 @@ export default function App() {
     const markerDiv = e.target.closest('[data-marker-id]');
     if (!markerDiv) return;
 
-    const markerRect = markerDiv.getBoundingClientRect();
-    // Adjust offset to account for center positioning
-    const centerOffsetX = markerRect.width / 2;
-    const centerOffsetY = markerRect.height / 2;
+    const marker = placed.find((m) => m.id === id);
+    const rect = imgRef.current.getBoundingClientRect();
     dragState.current = {
       active: true,
       id,
-      offsetX: e.clientX - (markerRect.left + centerOffsetX),
-      offsetY: e.clientY - (markerRect.top + centerOffsetY),
+      offsetX: e.clientX - (rect.left + rect.width * marker.x),
+      offsetY: e.clientY - (rect.top + rect.height * marker.y),
     };
   };
 
@@ -213,9 +211,8 @@ export default function App() {
     if (!dragState.current.active || !imgRef.current) return;
 
     const rect = imgRef.current.getBoundingClientRect();
-    // Calculate position relative to the image, adjusting for offset
-    const x = (e.clientX - dragState.current.offsetX) / rect.width;
-    const y = (e.clientY - dragState.current.offsetY) / rect.height;
+    const x = (e.clientX - rect.left - dragState.current.offsetX) / rect.width;
+    const y = (e.clientY - rect.top - dragState.current.offsetY) / rect.height;
     const clampedX = Math.max(0, Math.min(1, x));
     const clampedY = Math.max(0, Math.min(1, y));
 
@@ -336,7 +333,8 @@ export default function App() {
               }}
             >
               {m.iconSrc && (
-                <img src={m.iconSrc} alt={m.label} style={{ width: 24, height: 24 }} />
+                <img src={m.iconSrc} alt={m.label} style={{ width: 24, height: 24 }}
+                />
               )}
             </button>
           );
