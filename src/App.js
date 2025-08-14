@@ -151,7 +151,7 @@ export default function App() {
           clonedImg.style.width = `${displayedW}px`;
           clonedImg.style.height = "auto";
           clonedImg.style.maxWidth = "none";
-          clonedImg.style.maxHeight = "none";
+          clonedImg.style.maxHeight: "none";
         }
       },
     });
@@ -197,6 +197,7 @@ export default function App() {
     const markerDiv = e.target.closest('[data-marker-id]');
     if (!markerDiv) return;
 
+    const rect = imgRef.current.getBoundingClientRect();
     const markerRect = markerDiv.getBoundingClientRect();
     dragState.current = {
       active: true,
@@ -224,8 +225,8 @@ export default function App() {
 
   const endDrag = (e) => {
     if (dragState.current.active) {
-      e.stopPropagation(); // Prevent handleStageClick from firing
-      e.preventDefault();
+      e.stopPropagation(); // Prevent bubble to handleStageClick
+      e.preventDefault(); // Prevent click event
       dragState.current = { active: false, id: null, offsetX: 0, offsetY: 0 };
     }
   };
@@ -458,10 +459,10 @@ export default function App() {
                     cursor: "grab",
                     userSelect: "none",
                     touchAction: "none",
-                    background: "transparent", // Transparent background
-                    borderRadius: 6, // Reduced for smaller size
-                    padding: 4, // Reduced padding
-                    boxShadow: "0 2px 4px rgba(0,0,0,.15)", // Lighter shadow
+                    background: "transparent",
+                    borderRadius: 0, // Remove outline
+                    padding: 0, // No padding for transparency
+                    boxShadow: "none", // No shadow for full transparency
                   }}
                   title="Drag to move • Double-click to delete"
                 >
@@ -499,58 +500,58 @@ export default function App() {
               flexDirection: "column",
               gap: 12,
             }}
-          >
-            <div style={{ fontWeight: 700, fontSize: 16 }}>Export filename</div>
-            <input
-              value={exportFilename}
-              onChange={(e) => setExportFilename(e.target.value)}
-              placeholder="layout"
-              autoFocus
-              style={{
-                padding: "10px 12px",
-                borderRadius: 10,
-                border: "1px solid #e2e8f0",
-                outline: "none",
-                fontSize: 14,
-              }}
-            />
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-              <button
-                onClick={() => setShowExportModal(false)}
+            >
+              <div style={{ fontWeight: 700, fontSize: 16 }}>Export filename</div>
+              <input
+                value={exportFilename}
+                onChange={(e) => setExportFilename(e.target.value)}
+                placeholder="layout"
+                autoFocus
                 style={{
-                  padding: "8px 12px",
+                  padding: "10px 12px",
                   borderRadius: 10,
-                  background: "#f3f4f6",
-                  border: "1px solid #e5e7eb",
-                  cursor: "pointer",
+                  border: "1px solid #e2e8f0",
+                  outline: "none",
+                  fontSize: 14,
                 }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  exportJSONandPNG(exportFilename);
-                  setShowExportModal(false);
-                }}
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: 10,
-                  background: "#1976d2",
-                  color: "#fff",
-                  border: "none",
-                  cursor: "pointer",
-                  fontWeight: 600,
-                }}
-              >
-                Export
-              </button>
-            </div>
-            <div style={{ color: "#6b7280", fontSize: 12 }}>
-              Exports <b>.json</b> (image + markers) and <b>.png</b> (full layout).
+              />
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                <button
+                  onClick={() => setShowExportModal(false)}
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: 10,
+                    background: "#f3f4f6",
+                    border: "1px solid #e5e7eb",
+                    cursor: "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    exportJSONandPNG(exportFilename);
+                    setShowExportModal(false);
+                  }}
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: 10,
+                    background: "#1976d2",
+                    color: "#fff",
+                    border: "none",
+                    cursor: "pointer",
+                    fontWeight: 600,
+                  }}
+                >
+                  Export
+                </button>
+              </div>
+              <div style={{ color: "#6b7280", fontSize: 12 }}>
+                Exports <b>.json</b> (image + markers) and <b>.png</b> (full layout).
+              </div>
             </div>
           </div>
-        </div>
-      )}
-    </div>
-  );
+        )}
+      </div>
+    );
 }
