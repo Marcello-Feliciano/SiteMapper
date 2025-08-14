@@ -29,7 +29,7 @@ export default function App() {
   const [exportFilename, setExportFilename] = useState("layout");
 
   // --- Drag state ---
-  const dragState = useRef({ active: false, id: null, startX: 0, startY: 0 });
+  const dragState = useRef({ active: false, id: null, startX: 0, startY: 0, initialX: 0, initialY: 0 });
 
   // -------------- Helpers --------------
 
@@ -193,12 +193,17 @@ export default function App() {
   const startDrag = (id, e) => {
     if (!imgRef.current) return;
     e.stopPropagation();
+    const marker = placed.find((m) => m.id === id);
+    if (!marker) return;
     const rect = imgRef.current.getBoundingClientRect();
+    const markerRect = e.currentTarget.getBoundingClientRect();
     dragState.current = {
       active: true,
       id,
-      startX: e.clientX - rect.left,
-      startY: e.clientY - rect.top,
+      startX: e.clientX,
+      startY: e.clientY,
+      initialX: marker.x,
+      initialY: marker.y,
     };
   };
 
@@ -206,10 +211,12 @@ export default function App() {
     if (!dragState.current.active || !imgRef.current) return;
 
     const rect = imgRef.current.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / rect.width;
-    const y = (e.clientY - rect.top) / rect.height;
-    const clampedX = Math.max(0, Math.min(1, x));
-    const clampedY = Math.max(0, Math.min(1, y));
+    const dx = (e.clientX - dragState.current.startX) / rect.width;
+    const dy = (e.clientY - dragState.current.startY) / rect.height;
+    const newX = dragState.current.initialX + dx;
+    const newY = dragState.current.initialY + dy;
+    const clampedX = Math.max(0, Math.min(1, newX));
+    const clampedY = Math.max(0, Math.min(1, newY));
 
     setPlaced((list) =>
       list.map((m) =>
@@ -221,7 +228,8 @@ export default function App() {
   const endDrag = (e) => {
     if (dragState.current.active) {
       e.stopPropagation();
-      dragState.current = { active: false, id: null, startX: 0, startY: 0 };
+      e.preventDefault();
+      dragState.current = { active: false, id: null, startX: 0, startY: 0, initialX: 0, initialY: 0 };
     }
   };
 
