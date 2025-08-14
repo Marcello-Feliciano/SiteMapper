@@ -3,12 +3,11 @@ import html2canvas from "html2canvas";
 
 export default function App() {
   // --- Image + layout state ---
-  const [imageSrc, setImageSrc] = useState(null); // dataURL of uploaded image
+  const [imageSrc, setImageSrc] = useState(null);
   const imgRef = useRef(null);
   const stageRef = useRef(null);
 
-  // NEW: wrapper & overlay so markers align 1:1 with the displayed image box
-  const imageWrapRef = useRef(null);
+  // Wrappers/overlay so coords match exactly
   const overlayRef = useRef(null);
 
   // --- Marker palette + selection ---
@@ -23,7 +22,11 @@ export default function App() {
   const [selectedTypeId, setSelectedTypeId] = useState(null);
 
   // --- Placed markers (normalized coords 0..1) ---
-  const [placed, setPlaced] = useState([]); // {id, typeId, x, y, iconSrc}
+  // angle (deg) is used by camera/projector only
+  const [placed, setPlaced] = useState([]); // {id,typeId,x,y,iconSrc,angle?}
+
+  // Which marker (if any) is in "rotate mode"
+  const [rotateId, setRotateId] = useState(null);
 
   // --- File inputs ---
   const importInputRef = useRef(null);
@@ -32,7 +35,7 @@ export default function App() {
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportFilename, setExportFilename] = useState("layout");
 
-  // --- Drag state ---
+  // --- Drag/Rotate state ---
   const dragState = useRef({
     active: false,
     id: null,
@@ -44,11 +47,26 @@ export default function App() {
     pointerId: null,
   });
 
-  // suppress a click right after dragging so we don't place a new marker
+  const rotateState = useRef({
+    active: false,
+    id: null,
+    centerX: 0,
+    centerY: 0,
+    pointerId: null,
+    moved: false,
+  });
+
+  // suppress placement click after a drag/rotate
   const justDraggedRef = useRef(false);
 
-  // -------------- Helpers --------------
+  // --- Vis cone config (SVG overlay) ---
+  const FOV_DEG = 45;              // total field-of-view
+  const HALF_FOV = FOV_DEG / 2;
+  const CAMERA_COLOR = "rgba(16,185,129,0.35)";   // teal/green
+  const PROJECTOR_COLOR = "rgba(245,158,11,0.35)"; // amber
+  const CONE_RADIUS_RATIO = 0.18;  // percent of min(imageWidth,imageHeight)
 
+  // -------------- Helpers --------------
   const getSelectedType = () =>
     markerTypes.find((m) => m.id === selectedTypeId) || null;
 
@@ -79,7 +97,6 @@ export default function App() {
     });
 
   // -------------- Import --------------
-
   const handleImportClick = () => importInputRef.current?.click();
 
   const handleImportChange = async (e) => {
@@ -100,6 +117,7 @@ export default function App() {
             x: m.x,
             y: m.y,
             iconSrc: markerTypes.find((t) => t.id === m.typeId)?.iconSrc,
+            angle: typeof m.angle === "number" ? m.angle : 0,
           }))
         );
       } catch (err) {
@@ -117,7 +135,6 @@ export default function App() {
   };
 
   // -------------- Export --------------
-
   const exportJSONandPNG = async (filenameBase) => {
     if (!imageSrc || !stageRef.current || !imgRef.current) return;
 
@@ -126,11 +143,10 @@ export default function App() {
     let embeddedImage = imageSrc;
     try {
       embeddedImage = await imageToDataURL(imageSrc);
-    } catch {
-      /* continue even if conversion fails */
-    }
+    } catch {}
+
     const json = {
-      version: 1,
+      version: 2,
       exportedAt: new Date().toISOString(),
       imageData: embeddedImage,
       markers: placed.map((m) => ({
@@ -139,6 +155,7 @@ export default function App() {
         x: m.x,
         y: m.y,
         iconSrc: m.iconSrc,
+        angle: typeof m.angle === "number" ? m.angle : 0,
       })),
     };
     const jsonBlob = new Blob([JSON.stringify(json, null, 2)], {
@@ -151,7 +168,7 @@ export default function App() {
     a1.click();
     URL.revokeObjectURL(jsonUrl);
 
-    // Scale html2canvas to the natural image resolution
+    // Scale html2canvas to natural image resolution
     const imgEl = imgRef.current;
     const displayedW = imgEl.clientWidth;
     const displayedH = imgEl.clientHeight;
@@ -171,7 +188,6 @@ export default function App() {
         if (clonedImg) {
           clonedImg.style.width = `${displayedW}px`;
           clonedImg.style.height = "auto";
-          // FIX: assign with "=" not ":"
           clonedImg.style.maxWidth = "none";
           clonedImg.style.maxHeight = "none";
         }
@@ -185,21 +201,16 @@ export default function App() {
   };
 
   // -------------- Marker palette --------------
-
   const toggleSelectType = (typeId) => {
     setSelectedTypeId((cur) => (cur === typeId ? null : typeId));
   };
 
-  // -------------- Placement + dragging (now on overlay) --------------
-
+  // -------------- Placement + drag/rotate (on overlay) --------------
   const placeMarkerAtEvent = (e) => {
     if (!getSelectedType() || !overlayRef.current) return;
 
-    // Don't place if the click was on an existing marker
-    const onMarker = e.target.closest?.("[data-marker-id]");
-    if (onMarker) return;
-
-    // Don't place if we just completed a drag
+    // Don't place if clicking on a marker or just finished drag/rotate
+    if (e.target.closest?.("[data-marker-id]")) return;
     if (justDraggedRef.current) {
       justDraggedRef.current = false;
       return;
@@ -219,10 +230,12 @@ export default function App() {
         x,
         y,
         iconSrc: type.iconSrc,
+        angle: 0, // default orientation (up)
       },
     ]);
   };
 
+  // Move
   const startDrag = (id, e) => {
     if (!overlayRef.current) return;
     e.stopPropagation();
@@ -232,6 +245,7 @@ export default function App() {
     if (!marker) return;
 
     const pointerId = e.pointerId;
+    const rect = overlayRef.current.getBoundingClientRect();
 
     dragState.current = {
       active: true,
@@ -244,20 +258,47 @@ export default function App() {
       pointerId,
     };
 
-    // capture so we keep receiving events even if the pointer leaves the overlay
     try {
       overlayRef.current.setPointerCapture(pointerId);
     } catch {}
   };
 
   const onPointerMove = (e) => {
+    // rotation takes precedence if active
+    if (rotateState.current.active) {
+      if (!overlayRef.current) return;
+
+      const m = placed.find((p) => p.id === rotateState.current.id);
+      if (!m) return;
+
+      // marker center (client coords)
+      const rect = overlayRef.current.getBoundingClientRect();
+      const cx = rect.left + m.x * rect.width;
+      const cy = rect.top + m.y * rect.height;
+
+      // Angle: 0° is up
+      const angle =
+        (Math.atan2(e.clientY - cy, e.clientX - cx) * 180) / Math.PI + 90;
+
+      if (!rotateState.current.moved) {
+        if (Math.abs(e.movementX) > 0 || Math.abs(e.movementY) > 0) {
+          rotateState.current.moved = true;
+        }
+      }
+
+      setPlaced((list) =>
+        list.map((it) => (it.id === m.id ? { ...it, angle } : it))
+      );
+      return;
+    }
+
+    // dragging position
     if (!dragState.current.active || !overlayRef.current) return;
 
     const rect = overlayRef.current.getBoundingClientRect();
     const dx = (e.clientX - dragState.current.startX) / rect.width;
     const dy = (e.clientY - dragState.current.startY) / rect.height;
 
-    // mark as "moved" after a tiny threshold to suppress the click afterwards
     if (!dragState.current.moved) {
       if (Math.abs(e.clientX - dragState.current.startX) > 2 ||
           Math.abs(e.clientY - dragState.current.startY) > 2) {
@@ -278,43 +319,88 @@ export default function App() {
   };
 
   const endDrag = (e) => {
-    if (!dragState.current.active) return;
+    let didMove = false;
+
+    if (rotateState.current.active) {
+      didMove = rotateState.current.moved;
+      try {
+        if (
+          overlayRef.current &&
+          rotateState.current.pointerId != null
+        ) {
+          overlayRef.current.releasePointerCapture(
+            rotateState.current.pointerId
+          );
+        }
+      } catch {}
+      rotateState.current = {
+        active: false,
+        id: null,
+        centerX: 0,
+        centerY: 0,
+        pointerId: null,
+        moved: false,
+      };
+    } else if (dragState.current.active) {
+      didMove = dragState.current.moved;
+      try {
+        if (overlayRef.current && dragState.current.pointerId != null) {
+          overlayRef.current.releasePointerCapture(dragState.current.pointerId);
+        }
+      } catch {}
+      dragState.current = {
+        active: false,
+        id: null,
+        startX: 0,
+        startY: 0,
+        initialX: 0,
+        initialY: 0,
+        moved: false,
+        pointerId: null,
+      };
+    }
+
+    if (didMove) {
+      justDraggedRef.current = true;
+      setTimeout(() => (justDraggedRef.current = false), 0);
+    }
+
+    e?.stopPropagation?.();
+    e?.preventDefault?.();
+  };
+
+  const startRotate = (id, e) => {
+    if (!overlayRef.current) return;
     e.stopPropagation();
     e.preventDefault();
 
-    // suppress the very next click if we actually moved
-    if (dragState.current.moved) {
-      justDraggedRef.current = true;
-      // clear on next macrotask just in case
-      setTimeout(() => {
-        justDraggedRef.current = false;
-      }, 0);
-    }
+    const m = placed.find((p) => p.id === id);
+    if (!m) return;
+
+    const rect = overlayRef.current.getBoundingClientRect();
+    const cx = rect.left + m.x * rect.width;
+    const cy = rect.top + m.y * rect.height;
+
+    rotateState.current = {
+      active: true,
+      id,
+      centerX: cx,
+      centerY: cy,
+      pointerId: e.pointerId,
+      moved: false,
+    };
 
     try {
-      if (overlayRef.current && dragState.current.pointerId != null) {
-        overlayRef.current.releasePointerCapture(dragState.current.pointerId);
-      }
+      overlayRef.current.setPointerCapture(e.pointerId);
     } catch {}
-
-    dragState.current = {
-      active: false,
-      id: null,
-      startX: 0,
-      startY: 0,
-      initialX: 0,
-      initialY: 0,
-      moved: false,
-      pointerId: null,
-    };
   };
 
   const removeMarker = (id) => {
     setPlaced((list) => list.filter((m) => m.id !== id));
+    if (rotateId === id) setRotateId(null);
   };
 
   // -------------- UI --------------
-
   return (
     <div
       style={{
@@ -416,13 +502,7 @@ export default function App() {
                 userSelect: "none",
               }}
             >
-              {m.iconSrc && (
-                <img
-                  src={m.iconSrc}
-                  alt={m.label}
-                  style={{ width: 24, height: 24 }}
-                />
-              )}
+              <img src={m.iconSrc} alt={m.label} style={{ width: 24, height: 24 }} />
             </button>
           );
         })}
@@ -459,14 +539,10 @@ export default function App() {
                 cursor: "pointer",
               }}
             >
-              <div
-                style={{ fontSize: 44, color: "#1976d2", marginBottom: 8 }}
-              >
+              <div style={{ fontSize: 44, color: "#1976d2", marginBottom: 8 }}>
                 ☁️
               </div>
-              <div
-                style={{ fontWeight: 700, fontSize: 18, marginBottom: 4 }}
-              >
+              <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 4 }}>
                 Upload Floorplan
               </div>
               <div style={{ color: "#667085", fontSize: 14, marginBottom: 14 }}>
@@ -501,63 +577,144 @@ export default function App() {
               border: "1px solid #e2e8f0",
               borderRadius: 12,
               boxShadow: "0 8px 24px rgba(16,24,40,.06)",
-              padding: 8, // this padding no longer throws markers off
+              padding: 8,
               maxWidth: "min(95vw, 1200px)",
               overflow: "auto",
               touchAction: "none",
             }}
           >
-            {/* Image + overlay wrapper */}
-            <div
-              ref={imageWrapRef}
+            {/* Image */}
+            <img
+              id="floorplan-image"
+              ref={imgRef}
+              alt="Floorplan"
+              src={imageSrc}
               style={{
-                position: "relative",
-                display: "inline-block",
+                display: "block",
                 width: "100%",
+                height: "auto",
+                borderRadius: 8,
+                userSelect: "none",
+                pointerEvents: "none",
+              }}
+              draggable={false}
+            />
+
+            {/* Overlay receives events & holds markers */}
+            <div
+              ref={overlayRef}
+              onClick={placeMarkerAtEvent}
+              onPointerDown={(e) => {
+                const el = e.target.closest?.("[data-marker-id]");
+                if (!el) return;
+                const id = el.dataset.markerId;
+                if (rotateId === id) {
+                  // rotate mode for this marker
+                  startRotate(id, e);
+                } else {
+                  startDrag(id, e);
+                }
+              }}
+              onPointerMove={onPointerMove}
+              onPointerUp={endDrag}
+              onPointerCancel={endDrag}
+              style={{
+                position: "absolute",
+                inset: 0,
+                borderRadius: 8,
+                pointerEvents: "auto",
               }}
             >
-              <img
-                id="floorplan-image"
-                ref={imgRef}
-                alt="Floorplan"
-                src={imageSrc}
-                style={{
-                  display: "block",
-                  width: "100%",
-                  height: "auto",
-                  borderRadius: 8,
-                  userSelect: "none",
-                  pointerEvents: "none",
-                }}
-                draggable={false}
-              />
-
-              {/* Overlay covers exactly the rendered image area */}
-              <div
-                ref={overlayRef}
-                // Placement on click (suppressed if just dragged)
-                onClick={placeMarkerAtEvent}
-                onPointerDown={(e) => {
-                  const marker = e.target.closest?.("[data-marker-id]");
-                  if (marker) startDrag(marker.dataset.markerId, e);
-                }}
-                onPointerMove={onPointerMove}
-                onPointerUp={endDrag}
-                onPointerCancel={endDrag}
+              {/* SVG cones */}
+              <svg
+                width="100%"
+                height="100%"
+                viewBox="0 0 1000 1000"
+                preserveAspectRatio="none"
                 style={{
                   position: "absolute",
                   inset: 0,
+                  pointerEvents: "none",
                   borderRadius: 8,
-                  pointerEvents: "auto",
-                  // transparent overlay that receives events
                 }}
               >
-                {/* Markers layer */}
-                {placed.map((m) => {
-                  const type = markerTypes.find((t) => t.id === m.typeId);
-                  const content = type?.iconSrc ? (
+                {(() => {
+                  // render cones in normalized SVG coords (0..1000)
+                  const cones = [];
+                  const radiusNorm = CONE_RADIUS_RATIO * 1000; // ~0.18 of min dim since viewBox is square
+                  const a1 = (-HALF_FOV * Math.PI) / 180;
+                  const a2 = (HALF_FOV * Math.PI) / 180;
+                  const x1 = radiusNorm * Math.sin(a1);
+                  const y1 = -radiusNorm * Math.cos(a1);
+                  const x2 = radiusNorm * Math.sin(a2);
+                  const y2 = -radiusNorm * Math.cos(a2);
+                  const arc = `A ${radiusNorm} ${radiusNorm} 0 0 1 ${x2.toFixed(
+                    3
+                  )} ${y2.toFixed(3)}`;
+
+                  placed.forEach((m) => {
+                    if (m.typeId !== "camera" && m.typeId !== "projector") return;
+                    const cx = m.x * 1000;
+                    const cy = m.y * 1000;
+                    const color =
+                      m.typeId === "camera" ? CAMERA_COLOR : PROJECTOR_COLOR;
+                    const angle = (m.angle || 0).toFixed(3);
+
+                    cones.push(
+                      <g
+                        key={`cone-${m.id}`}
+                        transform={`translate(${cx.toFixed(
+                          3
+                        )},${cy.toFixed(3)}) rotate(${angle})`}
+                      >
+                        <path
+                          d={`M 0 0 L ${x1.toFixed(3)} ${y1.toFixed(
+                            3
+                          )} ${arc} Z`}
+                          fill={color}
+                          stroke="none"
+                        />
+                      </g>
+                    );
+                  });
+                  return cones;
+                })()}
+              </svg>
+
+              {/* Markers (icons) */}
+              {placed.map((m) => {
+                const type = markerTypes.find((t) => t.id === m.typeId);
+                return (
+                  <div
+                    key={m.id}
+                    data-marker-id={m.id}
+                    onDoubleClick={() => removeMarker(m.id)}
+                    onClick={(e) => {
+                      // Toggle rotate mode for this marker
+                      e.stopPropagation();
+                      if (rotateId === m.id) setRotateId(null);
+                      else setRotateId(m.id);
+                    }}
+                    title={
+                      rotateId === m.id
+                        ? "Rotate mode: drag to rotate • Click to exit • Double-click to delete"
+                        : "Drag to move • Click to enter rotate mode • Double-click to delete"
+                    }
+                    style={{
+                      position: "absolute",
+                      left: `${m.x * 100}%`,
+                      top: `${m.y * 100}%`,
+                      transform: "translate(-50%, -50%)",
+                      cursor: rotateId === m.id ? "crosshair" : "grab",
+                      userSelect: "none",
+                      touchAction: "none",
+                      background: "transparent",
+                      padding: 0,
+                      boxShadow: "none",
+                    }}
+                  >
                     <img
-                      src={type.iconSrc}
+                      src={type?.iconSrc}
                       alt={type?.label || "icon"}
                       style={{
                         width: 32,
@@ -565,35 +722,12 @@ export default function App() {
                         minWidth: 32,
                         minHeight: 32,
                         objectFit: "contain",
-                        pointerEvents: "none", // so the image itself doesn't steal events
+                        pointerEvents: "none",
                       }}
                     />
-                  ) : null;
-
-                  return (
-                    <div
-                      key={m.id}
-                      data-marker-id={m.id}
-                      onDoubleClick={() => removeMarker(m.id)}
-                      style={{
-                        position: "absolute",
-                        left: `${m.x * 100}%`,
-                        top: `${m.y * 100}%`,
-                        transform: "translate(-50%, -50%)",
-                        cursor: "grab",
-                        userSelect: "none",
-                        touchAction: "none",
-                        background: "transparent",
-                        padding: 0,
-                        boxShadow: "none",
-                      }}
-                      title="Drag to move • Double-click to delete"
-                    >
-                      {content}
-                    </div>
-                  );
-                })}
-              </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
