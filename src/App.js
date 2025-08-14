@@ -7,14 +7,18 @@ export default function App() {
   const imgRef = useRef(null);
   const stageRef = useRef(null);
 
+  // NEW: wrapper & overlay so markers align 1:1 with the displayed image box
+  const imageWrapRef = useRef(null);
+  const overlayRef = useRef(null);
+
   // --- Marker palette + selection ---
   const markerTypes = [
-    { id: "camera", label: "Camera", iconSrc: require('./assets/camera.png') },
-    { id: "door", label: "Door", iconSrc: require('./assets/door.png') },
-    { id: "cardreader", label: "Card", iconSrc: require('./assets/card.png') },
-    { id: "tv", label: "TV", iconSrc: require('./assets/tv.png') },
-    { id: "wifi", label: "Wi-Fi", iconSrc: require('./assets/wifi.png') },
-    { id: "projector", label: "Proj", iconSrc: require('./assets/projector.png') },
+    { id: "camera", label: "Camera", iconSrc: require("./assets/camera.png") },
+    { id: "door", label: "Door", iconSrc: require("./assets/door.png") },
+    { id: "cardreader", label: "Card", iconSrc: require("./assets/card.png") },
+    { id: "tv", label: "TV", iconSrc: require("./assets/tv.png") },
+    { id: "wifi", label: "Wi-Fi", iconSrc: require("./assets/wifi.png") },
+    { id: "projector", label: "Proj", iconSrc: require("./assets/projector.png") },
   ];
   const [selectedTypeId, setSelectedTypeId] = useState(null);
 
@@ -29,11 +33,24 @@ export default function App() {
   const [exportFilename, setExportFilename] = useState("layout");
 
   // --- Drag state ---
-  const dragState = useRef({ active: false, id: null, startX: 0, startY: 0, initialX: 0, initialY: 0 });
+  const dragState = useRef({
+    active: false,
+    id: null,
+    startX: 0,
+    startY: 0,
+    initialX: 0,
+    initialY: 0,
+    moved: false,
+    pointerId: null,
+  });
+
+  // suppress a click right after dragging so we don't place a new marker
+  const justDraggedRef = useRef(false);
 
   // -------------- Helpers --------------
 
-  const getSelectedType = () => markerTypes.find((m) => m.id === selectedTypeId) || null;
+  const getSelectedType = () =>
+    markerTypes.find((m) => m.id === selectedTypeId) || null;
 
   const readFileAsDataURL = (file) =>
     new Promise((resolve, reject) => {
@@ -73,7 +90,8 @@ export default function App() {
       try {
         const text = await file.text();
         const data = JSON.parse(text);
-        if (!data.imageData || !Array.isArray(data.markers)) throw new Error("Invalid JSON");
+        if (!data.imageData || !Array.isArray(data.markers))
+          throw new Error("Invalid JSON");
         setImageSrc(data.imageData);
         setPlaced(
           data.markers.map((m) => ({
@@ -108,8 +126,8 @@ export default function App() {
     let embeddedImage = imageSrc;
     try {
       embeddedImage = await imageToDataURL(imageSrc);
-    } catch (e) {
-      // continue; we’ll still export
+    } catch {
+      /* continue even if conversion fails */
     }
     const json = {
       version: 1,
@@ -123,7 +141,9 @@ export default function App() {
         iconSrc: m.iconSrc,
       })),
     };
-    const jsonBlob = new Blob([JSON.stringify(json, null, 2)], { type: "application/json" });
+    const jsonBlob = new Blob([JSON.stringify(json, null, 2)], {
+      type: "application/json",
+    });
     const jsonUrl = URL.createObjectURL(jsonBlob);
     const a1 = document.createElement("a");
     a1.href = jsonUrl;
@@ -131,6 +151,7 @@ export default function App() {
     a1.click();
     URL.revokeObjectURL(jsonUrl);
 
+    // Scale html2canvas to the natural image resolution
     const imgEl = imgRef.current;
     const displayedW = imgEl.clientWidth;
     const displayedH = imgEl.clientHeight;
@@ -150,8 +171,9 @@ export default function App() {
         if (clonedImg) {
           clonedImg.style.width = `${displayedW}px`;
           clonedImg.style.height = "auto";
-          clonedImg.style.maxWidth: "none";
-          clonedImg.style.maxHeight: "none";
+          // FIX: assign with "=" not ":"
+          clonedImg.style.maxWidth = "none";
+          clonedImg.style.maxHeight = "none";
         }
       },
     });
@@ -168,35 +190,49 @@ export default function App() {
     setSelectedTypeId((cur) => (cur === typeId ? null : typeId));
   };
 
-  // -------------- Placement + dragging --------------
+  // -------------- Placement + dragging (now on overlay) --------------
 
-  const handleStageClick = (e) => {
-    if (!getSelectedType() || !imgRef.current || dragState.current.active) return;
+  const placeMarkerAtEvent = (e) => {
+    if (!getSelectedType() || !overlayRef.current) return;
 
-    const rect = imgRef.current.getBoundingClientRect();
+    // Don't place if the click was on an existing marker
+    const onMarker = e.target.closest?.("[data-marker-id]");
+    if (onMarker) return;
+
+    // Don't place if we just completed a drag
+    if (justDraggedRef.current) {
+      justDraggedRef.current = false;
+      return;
+    }
+
+    const rect = overlayRef.current.getBoundingClientRect();
     const x = (e.clientX - rect.left) / rect.width;
     const y = (e.clientY - rect.top) / rect.height;
     if (x < 0 || x > 1 || y < 0 || y > 1) return;
 
+    const type = getSelectedType();
     setPlaced((list) => [
       ...list,
       {
         id: crypto.randomUUID(),
-        typeId: getSelectedType().id,
+        typeId: type.id,
         x,
         y,
-        iconSrc: getSelectedType().iconSrc,
+        iconSrc: type.iconSrc,
       },
     ]);
   };
 
   const startDrag = (id, e) => {
-    if (!imgRef.current) return;
+    if (!overlayRef.current) return;
     e.stopPropagation();
+    e.preventDefault();
+
     const marker = placed.find((m) => m.id === id);
     if (!marker) return;
-    const rect = imgRef.current.getBoundingClientRect();
-    const markerRect = e.currentTarget.getBoundingClientRect();
+
+    const pointerId = e.pointerId;
+
     dragState.current = {
       active: true,
       id,
@@ -204,15 +240,31 @@ export default function App() {
       startY: e.clientY,
       initialX: marker.x,
       initialY: marker.y,
+      moved: false,
+      pointerId,
     };
+
+    // capture so we keep receiving events even if the pointer leaves the overlay
+    try {
+      overlayRef.current.setPointerCapture(pointerId);
+    } catch {}
   };
 
   const onPointerMove = (e) => {
-    if (!dragState.current.active || !imgRef.current) return;
+    if (!dragState.current.active || !overlayRef.current) return;
 
-    const rect = imgRef.current.getBoundingClientRect();
+    const rect = overlayRef.current.getBoundingClientRect();
     const dx = (e.clientX - dragState.current.startX) / rect.width;
     const dy = (e.clientY - dragState.current.startY) / rect.height;
+
+    // mark as "moved" after a tiny threshold to suppress the click afterwards
+    if (!dragState.current.moved) {
+      if (Math.abs(e.clientX - dragState.current.startX) > 2 ||
+          Math.abs(e.clientY - dragState.current.startY) > 2) {
+        dragState.current.moved = true;
+      }
+    }
+
     const newX = dragState.current.initialX + dx;
     const newY = dragState.current.initialY + dy;
     const clampedX = Math.max(0, Math.min(1, newX));
@@ -226,11 +278,35 @@ export default function App() {
   };
 
   const endDrag = (e) => {
-    if (dragState.current.active) {
-      e.stopPropagation();
-      e.preventDefault();
-      dragState.current = { active: false, id: null, startX: 0, startY: 0, initialX: 0, initialY: 0 };
+    if (!dragState.current.active) return;
+    e.stopPropagation();
+    e.preventDefault();
+
+    // suppress the very next click if we actually moved
+    if (dragState.current.moved) {
+      justDraggedRef.current = true;
+      // clear on next macrotask just in case
+      setTimeout(() => {
+        justDraggedRef.current = false;
+      }, 0);
     }
+
+    try {
+      if (overlayRef.current && dragState.current.pointerId != null) {
+        overlayRef.current.releasePointerCapture(dragState.current.pointerId);
+      }
+    } catch {}
+
+    dragState.current = {
+      active: false,
+      id: null,
+      startX: 0,
+      startY: 0,
+      initialX: 0,
+      initialY: 0,
+      moved: false,
+      pointerId: null,
+    };
   };
 
   const removeMarker = (id) => {
@@ -240,7 +316,13 @@ export default function App() {
   // -------------- UI --------------
 
   return (
-    <div style={{ fontFamily: "Inter, system-ui, Arial, sans-serif", background: "#f5f7fb", minHeight: "100vh" }}>
+    <div
+      style={{
+        fontFamily: "Inter, system-ui, Arial, sans-serif",
+        background: "#f5f7fb",
+        minHeight: "100vh",
+      }}
+    >
       {/* Header */}
       <header
         style={{
@@ -335,7 +417,11 @@ export default function App() {
               }}
             >
               {m.iconSrc && (
-                <img src={m.iconSrc} alt={m.label} style={{ width: 24, height: 24 }} />
+                <img
+                  src={m.iconSrc}
+                  alt={m.label}
+                  style={{ width: 24, height: 24 }}
+                />
               )}
             </button>
           );
@@ -373,8 +459,16 @@ export default function App() {
                 cursor: "pointer",
               }}
             >
-              <div style={{ fontSize: 44, color: "#1976d2", marginBottom: 8 }}>☁️</div>
-              <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 4 }}>Upload Floorplan</div>
+              <div
+                style={{ fontSize: 44, color: "#1976d2", marginBottom: 8 }}
+              >
+                ☁️
+              </div>
+              <div
+                style={{ fontWeight: 700, fontSize: 18, marginBottom: 4 }}
+              >
+                Upload Floorplan
+              </div>
               <div style={{ color: "#667085", fontSize: 14, marginBottom: 14 }}>
                 Upload a building layout or floorplan to start adding markers
               </div>
@@ -401,76 +495,106 @@ export default function App() {
         ) : (
           <div
             ref={stageRef}
-            onClick={handleStageClick}
-            onPointerDown={(e) => {
-              const marker = e.target.closest('[data-marker-id]');
-              if (marker) startDrag(marker.dataset.markerId, e);
-            }}
-            onPointerMove={onPointerMove}
-            onPointerUp={endDrag}
-            onPointerCancel={endDrag}
             style={{
               position: "relative",
               background: "#fff",
               border: "1px solid #e2e8f0",
               borderRadius: 12,
               boxShadow: "0 8px 24px rgba(16,24,40,.06)",
-              padding: 8,
+              padding: 8, // this padding no longer throws markers off
               maxWidth: "min(95vw, 1200px)",
               overflow: "auto",
               touchAction: "none",
             }}
           >
-            <img
-              id="floorplan-image"
-              ref={imgRef}
-              alt="Floorplan"
-              src={imageSrc}
+            {/* Image + overlay wrapper */}
+            <div
+              ref={imageWrapRef}
               style={{
-                display: "block",
+                position: "relative",
+                display: "inline-block",
                 width: "100%",
-                height: "auto",
-                borderRadius: 8,
-                userSelect: "none",
-                pointerEvents: "none",
               }}
-              draggable={false}
-            />
+            >
+              <img
+                id="floorplan-image"
+                ref={imgRef}
+                alt="Floorplan"
+                src={imageSrc}
+                style={{
+                  display: "block",
+                  width: "100%",
+                  height: "auto",
+                  borderRadius: 8,
+                  userSelect: "none",
+                  pointerEvents: "none",
+                }}
+                draggable={false}
+              />
 
-            {/* Markers layer */}
-            {placed.map((m) => {
-              const type = markerTypes.find((t) => t.id === m.typeId);
-              const content = type?.iconSrc ? (
-                <img
-                  src={type.iconSrc}
-                  alt={type?.label || "icon"}
-                  style={{ width: 32, height: 32, minWidth: 32, minHeight: 32, objectFit: "contain" }}
-                />
-              ) : null;
+              {/* Overlay covers exactly the rendered image area */}
+              <div
+                ref={overlayRef}
+                // Placement on click (suppressed if just dragged)
+                onClick={placeMarkerAtEvent}
+                onPointerDown={(e) => {
+                  const marker = e.target.closest?.("[data-marker-id]");
+                  if (marker) startDrag(marker.dataset.markerId, e);
+                }}
+                onPointerMove={onPointerMove}
+                onPointerUp={endDrag}
+                onPointerCancel={endDrag}
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  borderRadius: 8,
+                  pointerEvents: "auto",
+                  // transparent overlay that receives events
+                }}
+              >
+                {/* Markers layer */}
+                {placed.map((m) => {
+                  const type = markerTypes.find((t) => t.id === m.typeId);
+                  const content = type?.iconSrc ? (
+                    <img
+                      src={type.iconSrc}
+                      alt={type?.label || "icon"}
+                      style={{
+                        width: 32,
+                        height: 32,
+                        minWidth: 32,
+                        minHeight: 32,
+                        objectFit: "contain",
+                        pointerEvents: "none", // so the image itself doesn't steal events
+                      }}
+                    />
+                  ) : null;
 
-              return (
-                <div
-                  key={m.id}
-                  data-marker-id={m.id}
-                  onDoubleClick={() => removeMarker(m.id)}
-                  style={{
-                    position: "absolute",
-                    left: `${m.x * 100}%`,
-                    top: `${m.y * 100}%`,
-                    transform: "translate(-50%, -50%)",
-                    cursor: "grab",
-                    userSelect: "none",
-                    touchAction: "none",
-                    background: "transparent",
-                    padding: 0,
-                    boxShadow: "none",
-                  }}
-                  title="Drag to move • Double-click to delete"
-                >
-                  {content}
-                </div>
-              );
-            })}
+                  return (
+                    <div
+                      key={m.id}
+                      data-marker-id={m.id}
+                      onDoubleClick={() => removeMarker(m.id)}
+                      style={{
+                        position: "absolute",
+                        left: `${m.x * 100}%`,
+                        top: `${m.y * 100}%`,
+                        transform: "translate(-50%, -50%)",
+                        cursor: "grab",
+                        userSelect: "none",
+                        touchAction: "none",
+                        background: "transparent",
+                        padding: 0,
+                        boxShadow: "none",
+                      }}
+                      title="Drag to move • Double-click to delete"
+                    >
+                      {content}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         )}
       </main>
