@@ -66,6 +66,9 @@ export default function App() {
   const PROJECTOR_COLOR = "rgba(245,158,11,0.35)"; // amber
   const CONE_RADIUS_RATIO = 0.18;  // percent of min(imageWidth,imageHeight)
 
+  // --- Rotation handle state ---
+  const rotationHandleRef = useRef(null);
+
   // -------------- Helpers --------------
   const getSelectedType = () =>
     markerTypes.find((m) => m.id === selectedTypeId) || null;
@@ -374,7 +377,7 @@ export default function App() {
     e.preventDefault();
 
     const m = placed.find((p) => p.id === id);
-    if (!m) return;
+    if (!m || (m.typeId !== "camera" && m.typeId !== "projector")) return;
 
     const rect = overlayRef.current.getBoundingClientRect();
     const cx = rect.left + m.x * rect.width;
@@ -389,14 +392,97 @@ export default function App() {
       moved: false,
     };
 
+    // Create or update rotation handle
+    if (!rotationHandleRef.current) {
+      const handle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      handle.setAttribute("r", 8);
+      handle.setAttribute("fill", "orange");
+      handle.style.cursor = "grab";
+      rotationHandleRef.current = handle;
+      overlayRef.current.querySelector("svg")?.appendChild(handle);
+    }
+    const bbox = { x: m.x * 1000 - 16, y: m.y * 1000 - 20, width: 32, height: 32 }; // Normalized SVG coords
+    rotationHandleRef.current.setAttribute("cx", (bbox.x + bbox.width / 2).toFixed(3));
+    rotationHandleRef.current.setAttribute("cy", (bbox.y).toFixed(3));
+    rotationHandleRef.current.addEventListener("pointerdown", startHandleRotate);
+
     try {
       overlayRef.current.setPointerCapture(e.pointerId);
     } catch {}
   };
 
+  const startHandleRotate = (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const m = placed.find((p) => p.id === rotateId);
+    if (!m) return;
+
+    const rect = overlayRef.current.getBoundingClientRect();
+    const svgRect = overlayRef.current.querySelector("svg").getBoundingClientRect();
+    const cx = parseFloat(rotationHandleRef.current.getAttribute("cx")) * (rect.width / 1000) + svgRect.left;
+    const cy = parseFloat(rotationHandleRef.current.getAttribute("cy")) * (rect.height / 1000) + svgRect.top;
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    rotateState.current.rotationStartAngle = Math.atan2(y - cy, x - cx);
+    rotateState.current.iconStartAngle = m.angle || 0;
+
+    window.addEventListener("pointermove", rotateIcon);
+    window.addEventListener("pointerup", stopRotate);
+  };
+
+  const rotateIcon = (e) => {
+    if (!rotateState.current.active || !overlayRef.current) return;
+
+    const rect = overlayRef.current.getBoundingClientRect();
+    const svgRect = overlayRef.current.querySelector("svg").getBoundingClientRect();
+    const cx = parseFloat(rotationHandleRef.current.getAttribute("cx")) * (rect.width / 1000) + svgRect.left;
+    const cy = parseFloat(rotationHandleRef.current.getAttribute("cy")) * (rect.height / 1000) + svgRect.top;
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const angle = Math.atan2(y - cy, x - cx) * (180 / Math.PI) + 90;
+
+    const deltaAngle = angle - rotateState.current.rotationStartAngle * (180 / Math.PI);
+    const newAngle = (rotateState.current.iconStartAngle + deltaAngle + 360) % 360;
+
+    setPlaced((list) =>
+      list.map((it) => (it.id === rotateId ? { ...it, angle: newAngle } : it))
+    );
+  };
+
+  const stopRotate = (e) => {
+    if (rotateState.current.active) {
+      const didMove = rotateState.current.moved;
+      try {
+        if (overlayRef.current && rotateState.current.pointerId != null) {
+          overlayRef.current.releasePointerCapture(rotateState.current.pointerId);
+        }
+      } catch {}
+      rotateState.current = {
+        active: false,
+        id: null,
+        centerX: 0,
+        centerY: 0,
+        pointerId: null,
+        moved: false,
+      };
+      if (didMove) {
+        justDraggedRef.current = true;
+        setTimeout(() => (justDraggedRef.current = false), 0);
+      }
+    }
+    window.removeEventListener("pointermove", rotateIcon);
+    window.removeEventListener("pointerup", stopRotate);
+  };
+
   const removeMarker = (id) => {
     setPlaced((list) => list.filter((m) => m.id !== id));
-    if (rotateId === id) setRotateId(null);
+    if (rotateId === id) {
+      setRotateId(null);
+      if (rotationHandleRef.current) {
+        rotationHandleRef.current.remove();
+        rotationHandleRef.current = null;
+      }
+    }
   };
 
   // -------------- UI --------------
@@ -680,6 +766,9 @@ export default function App() {
                 })()}
               </svg>
 
+              {/* Rotation handle */}
+              {rotateId && placed.find((m) => m.id === rotateId && (m.typeId === "camera" || m.typeId === "projector")) && rotationHandleRef.current}
+
               {/* Markers (icons) */}
               {placed.map((m) => {
                 const type = markerTypes.find((t) => t.id === m.typeId);
@@ -692,12 +781,12 @@ export default function App() {
                       // Toggle rotate mode for this marker
                       e.stopPropagation();
                       if (rotateId === m.id) setRotateId(null);
-                      else setRotateId(m.id);
+                      else if (m.typeId === "camera" || m.typeId === "projector") setRotateId(m.id);
                     }}
                     title={
                       rotateId === m.id
-                        ? "Rotate mode: drag to rotate • Click to exit • Double-click to delete"
-                        : "Drag to move • Click to enter rotate mode • Double-click to delete"
+                        ? "Rotate mode: drag handle to rotate • Click to exit • Double-tap to delete"
+                        : "Drag to move • Click to enter rotate mode • Double-tap to delete"
                     }
                     style={{
                       position: "absolute",
