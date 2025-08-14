@@ -29,7 +29,7 @@ export default function App() {
   const [exportFilename, setExportFilename] = useState("layout");
 
   // --- Drag state ---
-  const dragState = useRef({ active: false, id: null, offsetX: 0, offsetY: 0 });
+  const dragState = useRef({ active: false, id: null });
 
   // -------------- Helpers --------------
 
@@ -190,48 +190,21 @@ export default function App() {
     ]);
   };
 
-  const startDrag = (id, e) => {
+  const dragMarker = (id, clientX, clientY) => {
     if (!imgRef.current) return;
-    e.stopPropagation();
-    e.preventDefault();
-    const markerDiv = e.target.closest('[data-marker-id]');
-    if (!markerDiv) return;
 
-    const markerRect = markerDiv.getBoundingClientRect();
-    dragState.current = {
-      active: true,
-      id,
-      offsetX: e.clientX - markerRect.left,
-      offsetY: e.clientY - markerRect.top,
-    };
-  };
+    const img = imgRef.current;
+    const rect = img.getBoundingClientRect();
 
-  const onPointerMove = (e) => {
-    if (!dragState.current.active || !imgRef.current) return;
+    let x = (clientX - rect.left) / rect.width;
+    let y = (clientY - rect.top) / rect.height;
 
-    const rect = imgRef.current.getBoundingClientRect();
-    const x = (e.clientX - dragState.current.offsetX) / rect.width;
-    const y = (e.clientY - dragState.current.offsetY) / rect.height;
-    const clampedX = Math.max(0, Math.min(1, x));
-    const clampedY = Math.max(0, Math.min(1, y));
+    x = Math.min(Math.max(x, 0), 1);
+    y = Math.min(Math.max(y, 0), 1);
 
     setPlaced((list) =>
-      list.map((m) =>
-        m.id === dragState.current.id ? { ...m, x: clampedX, y: clampedY } : m
-      )
+      list.map((m) => (m.id === id ? { ...m, x, y } : m))
     );
-  };
-
-  const endDrag = (e) => {
-    if (dragState.current.active) {
-      e.stopPropagation();
-      e.preventDefault();
-      dragState.current = { active: false, id: null, offsetX: 0, offsetY: 0 };
-    }
-  };
-
-  const removeMarker = (id) => {
-    setPlaced((list) => list.filter((m) => m.id !== id));
   };
 
   // -------------- UI --------------
@@ -304,7 +277,7 @@ export default function App() {
           gap: 10,
           alignItems: "center",
           flexWrap: "wrap",
-          padding: "12px 16px",
+          padding: "12px 16ref",
           background: "#eef3fb",
           borderBottom: "1px solid #dde5f1",
         }}
@@ -399,13 +372,6 @@ export default function App() {
           <div
             ref={stageRef}
             onClick={handleStageClick}
-            onPointerDown={(e) => {
-              const marker = e.target.closest('[data-marker-id]');
-              if (marker) startDrag(marker.dataset.markerId, e);
-            }}
-            onPointerMove={onPointerMove}
-            onPointerUp={endDrag}
-            onPointerCancel={endDrag}
             style={{
               position: "relative",
               background: "#fff",
@@ -449,6 +415,17 @@ export default function App() {
                 <div
                   key={m.id}
                   data-marker-id={m.id}
+                  draggable
+                  onDragStart={(e) => {
+                    e.stopPropagation();
+                    dragState.current = { active: true, id: m.id };
+                    e.dataTransfer.setDragImage(new Image(), 0, 0); // Invisible drag image
+                  }}
+                  onDragEnd={(e) => {
+                    e.stopPropagation();
+                    dragMarker(m.id, e.clientX, e.clientY);
+                    dragState.current = { active: false, id: null };
+                  }}
                   onDoubleClick={() => removeMarker(m.id)}
                   style={{
                     position: "absolute",
@@ -459,8 +436,8 @@ export default function App() {
                     userSelect: "none",
                     touchAction: "none",
                     background: "transparent",
-                    padding: 0, // No padding
-                    boxShadow: "none", // No shadow
+                    padding: 0,
+                    boxShadow: "none",
                   }}
                   title="Drag to move • Double-click to delete"
                 >
@@ -498,7 +475,7 @@ export default function App() {
               flexDirection: "column",
               gap: 12,
             }}
-            >
+          >
             <div style={{ fontWeight: 700, fontSize: 16 }}>Export filename</div>
             <input
               value={exportFilename}
