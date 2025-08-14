@@ -198,11 +198,14 @@ export default function App() {
     if (!markerDiv) return;
 
     const markerRect = markerDiv.getBoundingClientRect();
+    // Adjust offset to account for center positioning
+    const centerOffsetX = markerRect.width / 2;
+    const centerOffsetY = markerRect.height / 2;
     dragState.current = {
       active: true,
       id,
-      offsetX: e.clientX - markerRect.left,
-      offsetY: e.clientY - markerRect.top,
+      offsetX: e.clientX - (markerRect.left + centerOffsetX),
+      offsetY: e.clientY - (markerRect.top + centerOffsetY),
     };
   };
 
@@ -210,6 +213,7 @@ export default function App() {
     if (!dragState.current.active || !imgRef.current) return;
 
     const rect = imgRef.current.getBoundingClientRect();
+    // Calculate position relative to the image, adjusting for offset
     const x = (e.clientX - dragState.current.offsetX) / rect.width;
     const y = (e.clientY - dragState.current.offsetY) / rect.height;
     const clampedX = Math.max(0, Math.min(1, x));
@@ -459,8 +463,8 @@ export default function App() {
                     userSelect: "none",
                     touchAction: "none",
                     background: "transparent",
-                    padding: 0, // No padding
-                    boxShadow: "none", // No shadow
+                    padding: 0,
+                    boxShadow: "none",
                   }}
                   title="Drag to move • Double-click to delete"
                 >
@@ -498,7 +502,7 @@ export default function App() {
               flexDirection: "column",
               gap: 12,
             }}
-            >
+          >
             <div style={{ fontWeight: 700, fontSize: 16 }}>Export filename</div>
             <input
               value={exportFilename}
