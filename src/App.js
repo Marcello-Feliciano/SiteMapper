@@ -54,6 +54,8 @@ export default function App() {
     centerY: 0,
     pointerId: null,
     moved: false,
+    rotationStartAngle: 0,
+    iconStartAngle: 0,
   });
 
   // suppress placement click after a drag/rotate
@@ -65,9 +67,6 @@ export default function App() {
   const CAMERA_COLOR = "rgba(16,185,129,0.35)";   // teal/green
   const PROJECTOR_COLOR = "rgba(245,158,11,0.35)"; // amber
   const CONE_RADIUS_RATIO = 0.18;  // percent of min(imageWidth,imageHeight)
-
-  // --- Rotation handle state ---
-  const rotationHandleRef = useRef(null);
 
   // -------------- Helpers --------------
   const getSelectedType = () =>
@@ -377,11 +376,14 @@ export default function App() {
     e.preventDefault();
 
     const m = placed.find((p) => p.id === id);
-    if (!m || (m.typeId !== "camera" && m.typeId !== "projector")) return;
+    if (!m) return;
 
     const rect = overlayRef.current.getBoundingClientRect();
     const cx = rect.left + m.x * rect.width;
     const cy = rect.top + m.y * rect.height;
+
+    const angle =
+      (Math.atan2(e.clientY - cy, e.clientX - cx) * 180) / Math.PI + 90;
 
     rotateState.current = {
       active: true,
@@ -390,99 +392,18 @@ export default function App() {
       centerY: cy,
       pointerId: e.pointerId,
       moved: false,
+      rotationStartAngle: angle,
+      iconStartAngle: m.angle || 0,
     };
-
-    // Create or update rotation handle
-    if (!rotationHandleRef.current) {
-      const handle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-      handle.setAttribute("r", 8);
-      handle.setAttribute("fill", "orange");
-      handle.style.cursor = "grab";
-      rotationHandleRef.current = handle;
-      overlayRef.current.querySelector("svg")?.appendChild(handle);
-    }
-    const bbox = { x: m.x * 1000 - 16, y: m.y * 1000 - 20, width: 32, height: 32 }; // Normalized SVG coords
-    rotationHandleRef.current.setAttribute("cx", (bbox.x + bbox.width / 2).toFixed(3));
-    rotationHandleRef.current.setAttribute("cy", (bbox.y).toFixed(3));
-    rotationHandleRef.current.addEventListener("pointerdown", startHandleRotate);
 
     try {
       overlayRef.current.setPointerCapture(e.pointerId);
     } catch {}
   };
 
-  const startHandleRotate = (e) => {
-    e.stopPropagation();
-    e.preventDefault();
-    const m = placed.find((p) => p.id === rotateId);
-    if (!m) return;
-
-    const rect = overlayRef.current.getBoundingClientRect();
-    const svgRect = overlayRef.current.querySelector("svg").getBoundingClientRect();
-    const cx = parseFloat(rotationHandleRef.current.getAttribute("cx")) * (rect.width / 1000) + svgRect.left;
-    const cy = parseFloat(rotationHandleRef.current.getAttribute("cy")) * (rect.height / 1000) + svgRect.top;
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    rotateState.current.rotationStartAngle = Math.atan2(y - cy, x - cx);
-    rotateState.current.iconStartAngle = m.angle || 0;
-
-    window.addEventListener("pointermove", rotateIcon);
-    window.addEventListener("pointerup", stopRotate);
-  };
-
-  const rotateIcon = (e) => {
-    if (!rotateState.current.active || !overlayRef.current) return;
-
-    const rect = overlayRef.current.getBoundingClientRect();
-    const svgRect = overlayRef.current.querySelector("svg").getBoundingClientRect();
-    const cx = parseFloat(rotationHandleRef.current.getAttribute("cx")) * (rect.width / 1000) + svgRect.left;
-    const cy = parseFloat(rotationHandleRef.current.getAttribute("cy")) * (rect.height / 1000) + svgRect.top;
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    const angle = Math.atan2(y - cy, x - cx) * (180 / Math.PI) + 90;
-
-    const deltaAngle = angle - rotateState.current.rotationStartAngle * (180 / Math.PI);
-    const newAngle = (rotateState.current.iconStartAngle + deltaAngle + 360) % 360;
-
-    setPlaced((list) =>
-      list.map((it) => (it.id === rotateId ? { ...it, angle: newAngle } : it))
-    );
-  };
-
-  const stopRotate = (e) => {
-    if (rotateState.current.active) {
-      const didMove = rotateState.current.moved;
-      try {
-        if (overlayRef.current && rotateState.current.pointerId != null) {
-          overlayRef.current.releasePointerCapture(rotateState.current.pointerId);
-        }
-      } catch {}
-      rotateState.current = {
-        active: false,
-        id: null,
-        centerX: 0,
-        centerY: 0,
-        pointerId: null,
-        moved: false,
-      };
-      if (didMove) {
-        justDraggedRef.current = true;
-        setTimeout(() => (justDraggedRef.current = false), 0);
-      }
-    }
-    window.removeEventListener("pointermove", rotateIcon);
-    window.removeEventListener("pointerup", stopRotate);
-  };
-
   const removeMarker = (id) => {
     setPlaced((list) => list.filter((m) => m.id !== id));
-    if (rotateId === id) {
-      setRotateId(null);
-      if (rotationHandleRef.current) {
-        rotationHandleRef.current.remove();
-        rotationHandleRef.current = null;
-      }
-    }
+    if (rotateId === id) setRotateId(null);
   };
 
   // -------------- UI --------------
@@ -624,12 +545,8 @@ export default function App() {
                 cursor: "pointer",
               }}
             >
-              <div style={{ fontSize: 44, color: "#1976d2", marginBottom: 8 }}>
-                ☁️
-              </div>
-              <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 4 }}>
-                Upload Floorplan
-              </div>
+              <div style={{ fontSize: 44, color: "#1976d2", marginBottom: 8 }}>☁️</div>
+              <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 4 }}>Upload Floorplan</div>
               <div style={{ color: "#667085", fontSize: 14, marginBottom: 14 }}>
                 Upload a building layout or floorplan to start adding markers
               </div>
@@ -764,10 +681,19 @@ export default function App() {
                   });
                   return cones;
                 })()}
-              </svg>
 
-              {/* Rotation handle */}
-              {rotateId && placed.find((m) => m.id === rotateId && (m.typeId === "camera" || m.typeId === "projector")) && rotationHandleRef.current}
+                {/* Rotation handle */}
+                {rotateId && placed.find((m) => m.id === rotateId && (m.typeId === "camera" || m.typeId === "projector")) && (
+                  <circle
+                    r={8}
+                    fill="orange"
+                    cx={placed.find((m) => m.id === rotateId).x * 1000}
+                    cy={placed.find((m) => m.id === rotateId).y * 1000 - 20}
+                    style={{ cursor: "grab" }}
+                    onPointerDown={(e) => startHandleRotate(e, rotateId)}
+                  />
+                )}
+              </svg>
 
               {/* Markers (icons) */}
               {placed.map((m) => {
@@ -785,7 +711,7 @@ export default function App() {
                     }}
                     title={
                       rotateId === m.id
-                        ? "Rotate mode: drag handle to rotate • Click to exit • Double-tap to delete"
+                        ? "Rotate mode: drag handle to rotate • Double-tap to delete"
                         : "Drag to move • Click to enter rotate mode • Double-tap to delete"
                     }
                     style={{
