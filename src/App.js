@@ -197,13 +197,12 @@ export default function App() {
     const markerDiv = e.target.closest('[data-marker-id]');
     if (!markerDiv) return;
 
-    const marker = placed.find((m) => m.id === id);
-    const rect = imgRef.current.getBoundingClientRect();
+    const markerRect = markerDiv.getBoundingClientRect();
     dragState.current = {
       active: true,
       id,
-      offsetX: e.clientX - (rect.left + rect.width * marker.x),
-      offsetY: e.clientY - (rect.top + rect.height * marker.y),
+      offsetX: e.clientX - markerRect.left,
+      offsetY: e.clientY - markerRect.top,
     };
   };
 
@@ -211,8 +210,8 @@ export default function App() {
     if (!dragState.current.active || !imgRef.current) return;
 
     const rect = imgRef.current.getBoundingClientRect();
-    const x = (e.clientX - rect.left - dragState.current.offsetX) / rect.width;
-    const y = (e.clientY - rect.top - dragState.current.offsetY) / rect.height;
+    const x = (e.clientX - dragState.current.offsetX) / rect.width;
+    const y = (e.clientY - dragState.current.offsetY) / rect.height;
     const clampedX = Math.max(0, Math.min(1, x));
     const clampedY = Math.max(0, Math.min(1, y));
 
@@ -225,7 +224,7 @@ export default function App() {
 
   const endDrag = (e) => {
     if (dragState.current.active) {
-      e.stopPropagation();
+      e.stopPropagation(); // Prevent handleStageClick from firing
       e.preventDefault();
       dragState.current = { active: false, id: null, offsetX: 0, offsetY: 0 };
     }
@@ -333,8 +332,7 @@ export default function App() {
               }}
             >
               {m.iconSrc && (
-                <img src={m.iconSrc} alt={m.label} style={{ width: 24, height: 24 }}
-                />
+                <img src={m.iconSrc} alt={m.label} style={{ width: 24, height: 24 }} />
               )}
             </button>
           );
@@ -460,9 +458,10 @@ export default function App() {
                     cursor: "grab",
                     userSelect: "none",
                     touchAction: "none",
-                    background: "transparent",
-                    padding: 0,
-                    boxShadow: "none",
+                    background: "transparent", // Transparent background
+                    borderRadius: 6, // Reduced for smaller size
+                    padding: 4, // Reduced padding
+                    boxShadow: "0 2px 4px rgba(0,0,0,.15)", // Lighter shadow
                   }}
                   title="Drag to move • Double-click to delete"
                 >
