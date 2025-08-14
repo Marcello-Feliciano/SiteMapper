@@ -245,7 +245,6 @@ export default function App() {
     if (!marker) return;
 
     const pointerId = e.pointerId;
-    const rect = overlayRef.current.getBoundingClientRect();
 
     dragState.current = {
       active: true,
