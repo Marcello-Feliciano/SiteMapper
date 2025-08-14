@@ -29,7 +29,7 @@ export default function App() {
   const [exportFilename, setExportFilename] = useState("layout");
 
   // --- Drag state ---
-  const dragState = useRef({ active: false, id: null });
+  const dragState = useRef({ active: false, id: null, startX: 0, startY: 0 });
 
   // -------------- Helpers --------------
 
@@ -150,8 +150,8 @@ export default function App() {
         if (clonedImg) {
           clonedImg.style.width = `${displayedW}px`;
           clonedImg.style.height = "auto";
-          clonedImg.style.maxWidth = "none";
-          clonedImg.style.maxHeight = "none";
+          clonedImg.style.maxWidth: "none";
+          clonedImg.style.maxHeight: "none";
         }
       },
     });
@@ -190,21 +190,43 @@ export default function App() {
     ]);
   };
 
-  const dragMarker = (id, clientX, clientY) => {
+  const startDrag = (id, e) => {
     if (!imgRef.current) return;
+    e.stopPropagation();
+    const rect = imgRef.current.getBoundingClientRect();
+    dragState.current = {
+      active: true,
+      id,
+      startX: e.clientX - rect.left,
+      startY: e.clientY - rect.top,
+    };
+  };
 
-    const img = imgRef.current;
-    const rect = img.getBoundingClientRect();
+  const onPointerMove = (e) => {
+    if (!dragState.current.active || !imgRef.current) return;
 
-    let x = (clientX - rect.left) / rect.width;
-    let y = (clientY - rect.top) / rect.height;
-
-    x = Math.min(Math.max(x, 0), 1);
-    y = Math.min(Math.max(y, 0), 1);
+    const rect = imgRef.current.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width;
+    const y = (e.clientY - rect.top) / rect.height;
+    const clampedX = Math.max(0, Math.min(1, x));
+    const clampedY = Math.max(0, Math.min(1, y));
 
     setPlaced((list) =>
-      list.map((m) => (m.id === id ? { ...m, x, y } : m))
+      list.map((m) =>
+        m.id === dragState.current.id ? { ...m, x: clampedX, y: clampedY } : m
+      )
     );
+  };
+
+  const endDrag = (e) => {
+    if (dragState.current.active) {
+      e.stopPropagation();
+      dragState.current = { active: false, id: null, startX: 0, startY: 0 };
+    }
+  };
+
+  const removeMarker = (id) => {
+    setPlaced((list) => list.filter((m) => m.id !== id));
   };
 
   // -------------- UI --------------
@@ -277,7 +299,7 @@ export default function App() {
           gap: 10,
           alignItems: "center",
           flexWrap: "wrap",
-          padding: "12px 16ref",
+          padding: "12px 16px",
           background: "#eef3fb",
           borderBottom: "1px solid #dde5f1",
         }}
@@ -372,6 +394,13 @@ export default function App() {
           <div
             ref={stageRef}
             onClick={handleStageClick}
+            onPointerDown={(e) => {
+              const marker = e.target.closest('[data-marker-id]');
+              if (marker) startDrag(marker.dataset.markerId, e);
+            }}
+            onPointerMove={onPointerMove}
+            onPointerUp={endDrag}
+            onPointerCancel={endDrag}
             style={{
               position: "relative",
               background: "#fff",
@@ -415,17 +444,6 @@ export default function App() {
                 <div
                   key={m.id}
                   data-marker-id={m.id}
-                  draggable
-                  onDragStart={(e) => {
-                    e.stopPropagation();
-                    dragState.current = { active: true, id: m.id };
-                    e.dataTransfer.setDragImage(new Image(), 0, 0); // Invisible drag image
-                  }}
-                  onDragEnd={(e) => {
-                    e.stopPropagation();
-                    dragMarker(m.id, e.clientX, e.clientY);
-                    dragState.current = { active: false, id: null };
-                  }}
                   onDoubleClick={() => removeMarker(m.id)}
                   style={{
                     position: "absolute",
