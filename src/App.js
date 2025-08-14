@@ -29,7 +29,8 @@ export default function App() {
   const [exportFilename, setExportFilename] = useState("layout");
 
   // --- Drag state ---
-  const dragState = useRef({ active: false, id: null, offsetX: 0, offsetY: 0 });
+  const dragState = useRef({ active: false, id: null, startMouseX: 0, startMouseY: 0, startMarkerX: 0, startMarkerY: 0 });
+  const isDragging = useRef(false);
 
   // -------------- Helpers --------------
 
@@ -194,15 +195,17 @@ export default function App() {
     if (!imgRef.current) return;
     e.stopPropagation();
     e.preventDefault();
-    const markerDiv = e.target.closest('[data-marker-id]');
-    if (!markerDiv) return;
+    const marker = placed.find((m) => m.id === id);
+    if (!marker) return;
 
-    const markerRect = markerDiv.getBoundingClientRect();
+    isDragging.current = true;
     dragState.current = {
       active: true,
       id,
-      offsetX: e.clientX - markerRect.left,
-      offsetY: e.clientY - markerRect.top,
+      startMouseX: e.clientX,
+      startMouseY: e.clientY,
+      startMarkerX: marker.x,
+      startMarkerY: marker.y,
     };
   };
 
@@ -210,8 +213,10 @@ export default function App() {
     if (!dragState.current.active || !imgRef.current) return;
 
     const rect = imgRef.current.getBoundingClientRect();
-    const x = (e.clientX - dragState.current.offsetX) / rect.width;
-    const y = (e.clientY - dragState.current.offsetY) / rect.height;
+    const dx = (e.clientX - dragState.current.startMouseX) / rect.width;
+    const dy = (e.clientY - dragState.current.startMouseY) / rect.height;
+    const x = dragState.current.startMarkerX + dx;
+    const y = dragState.current.startMarkerY + dy;
     const clampedX = Math.max(0, Math.min(1, x));
     const clampedY = Math.max(0, Math.min(1, y));
 
@@ -224,9 +229,10 @@ export default function App() {
 
   const endDrag = (e) => {
     if (dragState.current.active) {
-      e.stopPropagation(); // Prevent handleStageClick from firing
+      e.stopPropagation();
       e.preventDefault();
-      dragState.current = { active: false, id: null, offsetX: 0, offsetY: 0 };
+      dragState.current = { active: false, id: null, startMouseX: 0, startMouseY: 0, startMarkerX: 0, startMarkerY: 0 };
+      setTimeout(() => { isDragging.current = false; }, 100); // Delay to prevent immediate click
     }
   };
 
@@ -398,7 +404,10 @@ export default function App() {
         ) : (
           <div
             ref={stageRef}
-            onClick={handleStageClick}
+            onClick={(e) => {
+              if (isDragging.current) return; // Prevent placement after drag
+              handleStageClick(e);
+            }}
             onPointerDown={(e) => {
               const marker = e.target.closest('[data-marker-id]');
               if (marker) startDrag(marker.dataset.markerId, e);
@@ -458,10 +467,9 @@ export default function App() {
                     cursor: "grab",
                     userSelect: "none",
                     touchAction: "none",
-                    background: "transparent", // Transparent background
-                    borderRadius: 6, // Reduced for smaller size
-                    padding: 4, // Reduced padding
-                    boxShadow: "0 2px 4px rgba(0,0,0,.15)", // Lighter shadow
+                    background: "transparent",
+                    padding: 0,
+                    boxShadow: "none",
                   }}
                   title="Drag to move • Double-click to delete"
                 >
@@ -499,7 +507,7 @@ export default function App() {
               flexDirection: "column",
               gap: 12,
             }}
-          >
+            >
             <div style={{ fontWeight: 700, fontSize: 16 }}>Export filename</div>
             <input
               value={exportFilename}
