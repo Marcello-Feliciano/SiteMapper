@@ -292,7 +292,6 @@ export default function App() {
     if (e.target.closest?.("[data-rotate-handle]")) return;
 
     e.stopPropagation();
-    e.preventDefault();
 
     const marker = placed.find((m) => m.id === id);
     if (!marker) return;
