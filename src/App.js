@@ -315,6 +315,19 @@ export default function App() {
     } catch {}
   };
 
+  const startRotate = (markerId, e) => {
+  if (!overlayRef.current) return;
+  e.stopPropagation();
+  e.preventDefault(); // HOLD: only here to prevent text/image drag
+
+  setActiveRotateId(markerId);
+  const pointerId = e.pointerId;
+  rotateState.current = { active: true, id: markerId, pointerId };
+  try {
+    overlayRef.current.setPointerCapture(pointerId);
+  } catch {}
+};
+
   const onPointerMove = (e) => {
     // Rotation drag
     if (rotateState.current.active && overlayRef.current) {
@@ -755,6 +768,7 @@ export default function App() {
                         <div
                           data-rotate-handle
                           data-marker-id={m.id}
+                          onPointerDown={(e) => startRotate(m.id, e)}
                           // place the handle 70px away in the current cone direction
                           style={{
                             position: "absolute",
