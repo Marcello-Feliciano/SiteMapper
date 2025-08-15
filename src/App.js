@@ -1,33 +1,32 @@
 import React, { useRef, useState } from "react";
 import html2canvas from "html2canvas";
 
-// Import fixed icon images (place these in src/assets/ and resize to 128x128px)
-import cameraIcon from './assets/camera.png';
-import doorIcon from './assets/door.png';
-import wifiIcon from './assets/wifi.png';
-import tvIcon from './assets/tv.png';
-import projectorIcon from './assets/projector.png';
-import cardIcon from './assets/card.png';
-
 export default function App() {
   // --- Image + layout state ---
-  const [imageSrc, setImageSrc] = useState(null); // dataURL of uploaded image
+  const [imageSrc, setImageSrc] = useState(null);
   const imgRef = useRef(null);
   const stageRef = useRef(null);
 
+  // Wrappers/overlay so coords match exactly
+  const overlayRef = useRef(null);
+
   // --- Marker palette + selection ---
   const markerTypes = [
-    { id: "camera", label: "Camera", iconSrc: cameraIcon },
-    { id: "door", label: "Door", iconSrc: doorIcon },
-    { id: "cardreader", label: "Card", iconSrc: cardIcon },
-    { id: "tv", label: "TV", iconSrc: tvIcon },
-    { id: "wifi", label: "Wi-Fi", iconSrc: wifiIcon },
-    { id: "projector", label: "Proj", iconSrc: projectorIcon },
+    { id: "camera", label: "Camera", iconSrc: require("./assets/camera.png") },
+    { id: "door", label: "Door", iconSrc: require("./assets/door.png") },
+    { id: "cardreader", label: "Card", iconSrc: require("./assets/card.png") },
+    { id: "tv", label: "TV", iconSrc: require("./assets/tv.png") },
+    { id: "wifi", label: "Wi-Fi", iconSrc: require("./assets/wifi.png") },
+    { id: "projector", label: "Proj", iconSrc: require("./assets/projector.png") },
   ];
   const [selectedTypeId, setSelectedTypeId] = useState(null);
 
   // --- Placed markers (normalized coords 0..1) ---
-  const [placed, setPlaced] = useState([]); // {id, typeId, x, y, iconSrc}
+  // angle (deg) is used by camera/projector only
+  const [placed, setPlaced] = useState([]); // {id,typeId,x,y,iconSrc,angle?}
+
+  // Which marker (if any) is in "rotate mode"
+  const [rotateId, setRotateId] = useState(null);
 
   // --- File inputs ---
   const importInputRef = useRef(null);
@@ -36,12 +35,40 @@ export default function App() {
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportFilename, setExportFilename] = useState("layout");
 
-  // --- Drag state ---
-  const dragState = useRef({ active: false, id: null, startX: 0, startY: 0 });
+  // --- Drag/Rotate state ---
+  const dragState = useRef({
+    active: false,
+    id: null,
+    startX: 0,
+    startY: 0,
+    initialX: 0,
+    initialY: 0,
+    moved: false,
+    pointerId: null,
+  });
+
+  const rotateState = useRef({
+    active: false,
+    id: null,
+    centerX: 0,
+    centerY: 0,
+    pointerId: null,
+    moved: false,
+  });
+
+  // suppress placement click after a drag/rotate
+  const justDraggedRef = useRef(false);
+
+  // --- Vis cone config (SVG overlay) ---
+  const FOV_DEG = 45;              // total field-of-view
+  const HALF_FOV = FOV_DEG / 2;
+  const CAMERA_COLOR = "rgba(16,185,129,0.35)";   // teal/green
+  const PROJECTOR_COLOR = "rgba(245,158,11,0.35)"; // amber
+  const CONE_RADIUS_RATIO = 0.18;  // percent of min(imageWidth,imageHeight)
 
   // -------------- Helpers --------------
-
-  const getSelectedType = () => markerTypes.find((m) => m.id === selectedTypeId) || null;
+  const getSelectedType = () =>
+    markerTypes.find((m) => m.id === selectedTypeId) || null;
 
   const readFileAsDataURL = (file) =>
     new Promise((resolve, reject) => {
@@ -70,7 +97,6 @@ export default function App() {
     });
 
   // -------------- Import --------------
-
   const handleImportClick = () => importInputRef.current?.click();
 
   const handleImportChange = async (e) => {
@@ -81,7 +107,8 @@ export default function App() {
       try {
         const text = await file.text();
         const data = JSON.parse(text);
-        if (!data.imageData || !Array.isArray(data.markers)) throw new Error("Invalid JSON");
+        if (!data.imageData || !Array.isArray(data.markers))
+          throw new Error("Invalid JSON");
         setImageSrc(data.imageData);
         setPlaced(
           data.markers.map((m) => ({
@@ -90,6 +117,7 @@ export default function App() {
             x: m.x,
             y: m.y,
             iconSrc: markerTypes.find((t) => t.id === m.typeId)?.iconSrc,
+            angle: typeof m.angle === "number" ? m.angle : 0,
           }))
         );
       } catch (err) {
@@ -107,7 +135,6 @@ export default function App() {
   };
 
   // -------------- Export --------------
-
   const exportJSONandPNG = async (filenameBase) => {
     if (!imageSrc || !stageRef.current || !imgRef.current) return;
 
@@ -116,11 +143,10 @@ export default function App() {
     let embeddedImage = imageSrc;
     try {
       embeddedImage = await imageToDataURL(imageSrc);
-    } catch (e) {
-      // continue; we’ll still export
-    }
+    } catch {}
+
     const json = {
-      version: 1,
+      version: 2,
       exportedAt: new Date().toISOString(),
       imageData: embeddedImage,
       markers: placed.map((m) => ({
@@ -129,9 +155,12 @@ export default function App() {
         x: m.x,
         y: m.y,
         iconSrc: m.iconSrc,
+        angle: typeof m.angle === "number" ? m.angle : 0,
       })),
     };
-    const jsonBlob = new Blob([JSON.stringify(json, null, 2)], { type: "application/json" });
+    const jsonBlob = new Blob([JSON.stringify(json, null, 2)], {
+      type: "application/json",
+    });
     const jsonUrl = URL.createObjectURL(jsonBlob);
     const a1 = document.createElement("a");
     a1.href = jsonUrl;
@@ -139,6 +168,7 @@ export default function App() {
     a1.click();
     URL.revokeObjectURL(jsonUrl);
 
+    // Scale html2canvas to natural image resolution
     const imgEl = imgRef.current;
     const displayedW = imgEl.clientWidth;
     const displayedH = imgEl.clientHeight;
@@ -171,57 +201,115 @@ export default function App() {
   };
 
   // -------------- Marker palette --------------
-
   const toggleSelectType = (typeId) => {
     setSelectedTypeId((cur) => (cur === typeId ? null : typeId));
   };
 
-  // -------------- Placement + dragging --------------
+  // -------------- Placement + drag/rotate (on overlay) --------------
+  const placeMarkerAtEvent = (e) => {
+    if (!getSelectedType() || !overlayRef.current) return;
 
-  const handleStageClick = (e) => {
-    if (!getSelectedType() || !imgRef.current || dragState.current.active) return;
+    // Don't place if clicking on a marker or just finished drag/rotate
+    if (e.target.closest?.("[data-marker-id]")) return;
+    if (justDraggedRef.current) {
+      justDraggedRef.current = false;
+      return;
+    }
 
-    const rect = imgRef.current.getBoundingClientRect();
+    const rect = overlayRef.current.getBoundingClientRect();
     const x = (e.clientX - rect.left) / rect.width;
     const y = (e.clientY - rect.top) / rect.height;
     if (x < 0 || x > 1 || y < 0 || y > 1) return;
 
+    const type = getSelectedType();
     setPlaced((list) => [
       ...list,
       {
         id: crypto.randomUUID(),
-        typeId: getSelectedType().id,
+        typeId: type.id,
         x,
         y,
-        iconSrc: getSelectedType().iconSrc,
+        iconSrc: type.iconSrc,
+        angle: 0, // default orientation (up)
       },
     ]);
   };
 
+  // Move
   const startDrag = (id, e) => {
-    if (!imgRef.current) return;
+    if (!overlayRef.current) return;
     e.stopPropagation();
     e.preventDefault();
-    const markerDiv = e.target.closest('[data-marker-id]');
-    if (!markerDiv) return;
 
-    const markerRect = markerDiv.getBoundingClientRect();
+    const marker = placed.find((m) => m.id === id);
+    if (!marker) return;
+
+    const pointerId = e.pointerId;
+    const rect = overlayRef.current.getBoundingClientRect();
+
     dragState.current = {
       active: true,
       id,
-      offsetX: e.clientX - markerRect.left,
-      offsetY: e.clientY - markerRect.top,
+      startX: e.clientX,
+      startY: e.clientY,
+      initialX: marker.x,
+      initialY: marker.y,
+      moved: false,
+      pointerId,
     };
+
+    try {
+      overlayRef.current.setPointerCapture(pointerId);
+    } catch {}
   };
 
   const onPointerMove = (e) => {
-    if (!dragState.current.active || !imgRef.current) return;
+    // rotation takes precedence if active
+    if (rotateState.current.active) {
+      if (!overlayRef.current) return;
 
-    const rect = imgRef.current.getBoundingClientRect();
-    const x = (e.clientX - dragState.current.offsetX) / rect.width;
-    const y = (e.clientY - dragState.current.offsetY) / rect.height;
-    const clampedX = Math.max(0, Math.min(1, x));
-    const clampedY = Math.max(0, Math.min(1, y));
+      const m = placed.find((p) => p.id === rotateState.current.id);
+      if (!m) return;
+
+      // marker center (client coords)
+      const rect = overlayRef.current.getBoundingClientRect();
+      const cx = rect.left + m.x * rect.width;
+      const cy = rect.top + m.y * rect.height;
+
+      // Angle: 0° is up
+      const angle =
+        (Math.atan2(e.clientY - cy, e.clientX - cx) * 180) / Math.PI + 90;
+
+      if (!rotateState.current.moved) {
+        if (Math.abs(e.movementX) > 0 || Math.abs(e.movementY) > 0) {
+          rotateState.current.moved = true;
+        }
+      }
+
+      setPlaced((list) =>
+        list.map((it) => (it.id === m.id ? { ...it, angle } : it))
+      );
+      return;
+    }
+
+    // dragging position
+    if (!dragState.current.active || !overlayRef.current) return;
+
+    const rect = overlayRef.current.getBoundingClientRect();
+    const dx = (e.clientX - dragState.current.startX) / rect.width;
+    const dy = (e.clientY - dragState.current.startY) / rect.height;
+
+    if (!dragState.current.moved) {
+      if (Math.abs(e.clientX - dragState.current.startX) > 2 ||
+          Math.abs(e.clientY - dragState.current.startY) > 2) {
+        dragState.current.moved = true;
+      }
+    }
+
+    const newX = dragState.current.initialX + dx;
+    const newY = dragState.current.initialY + dy;
+    const clampedX = Math.max(0, Math.min(1, newX));
+    const clampedY = Math.max(0, Math.min(1, newY));
 
     setPlaced((list) =>
       list.map((m) =>
@@ -231,19 +319,96 @@ export default function App() {
   };
 
   const endDrag = (e) => {
-    if (dragState.current.active) {
-      dragState.current = { active: false, id: null, offsetX: 0, offsetY: 0 };
+    let didMove = false;
+
+    if (rotateState.current.active) {
+      didMove = rotateState.current.moved;
+      try {
+        if (
+          overlayRef.current &&
+          rotateState.current.pointerId != null
+        ) {
+          overlayRef.current.releasePointerCapture(
+            rotateState.current.pointerId
+          );
+        }
+      } catch {}
+      rotateState.current = {
+        active: false,
+        id: null,
+        centerX: 0,
+        centerY: 0,
+        pointerId: null,
+        moved: false,
+      };
+    } else if (dragState.current.active) {
+      didMove = dragState.current.moved;
+      try {
+        if (overlayRef.current && dragState.current.pointerId != null) {
+          overlayRef.current.releasePointerCapture(dragState.current.pointerId);
+        }
+      } catch {}
+      dragState.current = {
+        active: false,
+        id: null,
+        startX: 0,
+        startY: 0,
+        initialX: 0,
+        initialY: 0,
+        moved: false,
+        pointerId: null,
+      };
     }
+
+    if (didMove) {
+      justDraggedRef.current = true;
+      setTimeout(() => (justDraggedRef.current = false), 0);
+    }
+
+    e?.stopPropagation?.();
+    e?.preventDefault?.();
+  };
+
+  const startRotate = (id, e) => {
+    if (!overlayRef.current) return;
+    e.stopPropagation();
+    e.preventDefault();
+
+    const m = placed.find((p) => p.id === id);
+    if (!m) return;
+
+    const rect = overlayRef.current.getBoundingClientRect();
+    const cx = rect.left + m.x * rect.width;
+    const cy = rect.top + m.y * rect.height;
+
+    rotateState.current = {
+      active: true,
+      id,
+      centerX: cx,
+      centerY: cy,
+      pointerId: e.pointerId,
+      moved: false,
+    };
+
+    try {
+      overlayRef.current.setPointerCapture(e.pointerId);
+    } catch {}
   };
 
   const removeMarker = (id) => {
     setPlaced((list) => list.filter((m) => m.id !== id));
+    if (rotateId === id) setRotateId(null);
   };
 
   // -------------- UI --------------
-
   return (
-    <div style={{ fontFamily: "Inter, system-ui, Arial, sans-serif", background: "#f5f7fb", minHeight: "100vh" }}>
+    <div
+      style={{
+        fontFamily: "Inter, system-ui, Arial, sans-serif",
+        background: "#f5f7fb",
+        minHeight: "100vh",
+      }}
+    >
       {/* Header */}
       <header
         style={{
@@ -374,8 +539,12 @@ export default function App() {
                 cursor: "pointer",
               }}
             >
-              <div style={{ fontSize: 44, color: "#1976d2", marginBottom: 8 }}>☁️</div>
-              <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 4 }}>Upload Floorplan</div>
+              <div style={{ fontSize: 44, color: "#1976d2", marginBottom: 8 }}>
+                ☁️
+              </div>
+              <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 4 }}>
+                Upload Floorplan
+              </div>
               <div style={{ color: "#667085", fontSize: 14, marginBottom: 14 }}>
                 Upload a building layout or floorplan to start adding markers
               </div>
@@ -528,8 +697,8 @@ export default function App() {
                     }}
                     title={
                       rotateId === m.id
-                        ? "Rotate mode: drag to rotate • Click to exit • Double-tap to delete"
-                        : "Drag to move • Click to enter rotate mode • Double-tap to delete"
+                        ? "Rotate mode: drag to rotate • Click to exit • Double-click to delete"
+                        : "Drag to move • Click to enter rotate mode • Double-click to delete"
                     }
                     style={{
                       position: "absolute",
