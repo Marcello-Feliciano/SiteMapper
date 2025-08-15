@@ -102,6 +102,7 @@ imageCanvas.addEventListener("mouseup", endInteraction);
 imageCanvas.addEventListener("touchend", endInteraction);
 
 function startInteraction(e) {
+    e.preventDefault();
     const pos = getMousePos(e);
     selectedMarkerIndex = getMarkerAtPos(pos.x, pos.y);
 
@@ -118,6 +119,7 @@ function startInteraction(e) {
 }
 
 function moveInteraction(e) {
+    e.preventDefault();
     if (selectedMarkerIndex === null) return;
     const pos = getMousePos(e);
     const marker = markers[selectedMarkerIndex];
@@ -142,11 +144,21 @@ function endInteraction() {
     isRotating = false;
 }
 
-// Double click/tap delete
-let lastTapTime = 0;
+// Double tap/click delete with improved detection
+let tapCount = 0;
+let tapTimer = null;
+
 imageCanvas.addEventListener("click", (e) => {
-    const now = Date.now();
-    if (now - lastTapTime < 300) {
+    tapCount++;
+    
+    if (tapCount === 1) {
+        tapTimer = setTimeout(() => {
+            tapCount = 0;
+        }, 300);
+    } else if (tapCount === 2) {
+        clearTimeout(tapTimer);
+        tapCount = 0;
+        
         const pos = getMousePos(e);
         const idx = getMarkerAtPos(pos.x, pos.y);
         if (idx !== null) {
@@ -155,7 +167,25 @@ imageCanvas.addEventListener("click", (e) => {
             draw();
         }
     }
-    lastTapTime = now;
+});
+
+// Handle touch double tap
+let lastTouchTime = 0;
+imageCanvas.addEventListener("touchend", (e) => {
+    const currentTime = new Date().getTime();
+    const tapLength = currentTime - lastTouchTime;
+    
+    if (tapLength < 300 && tapLength > 0) {
+        e.preventDefault();
+        const pos = getMousePos(e);
+        const idx = getMarkerAtPos(pos.x, pos.y);
+        if (idx !== null) {
+            markers.splice(idx, 1);
+            saveMarkers();
+            draw();
+        }
+    }
+    lastTouchTime = currentTime;
 });
 
 function getMousePos(evt) {
@@ -171,8 +201,6 @@ function getMousePos(evt) {
 function getMarkerAtPos(x, y) {
     for (let i = markers.length - 1; i >= 0; i--) {
         const marker = markers[i];
-        const img = new Image();
-        img.src = marker.type;
         const size = 40;
         if (x >= marker.x - size / 2 && x <= marker.x + size / 2 &&
             y >= marker.y - size / 2 && y <= marker.y + size / 2) {
@@ -183,6 +211,7 @@ function getMarkerAtPos(x, y) {
 }
 
 function isOnRotationHandle(marker, x, y) {
+    if (!marker.showCone) return false;
     const handleDistance = 30;
     const handleX = marker.x + Math.cos(marker.rotation) * handleDistance;
     const handleY = marker.y + Math.sin(marker.rotation) * handleDistance;
@@ -198,10 +227,18 @@ function saveMarkers() {
 
 function draw() {
     ctx.clearRect(0, 0, imageCanvas.width, imageCanvas.height);
+    
     if (backgroundImage) {
         ctx.drawImage(backgroundImage, 0, 0, imageCanvas.width, imageCanvas.height);
     }
+    
     markers.forEach((marker, i) => {
+        // Draw cone first (so it appears behind the icon)
+        if (marker.showCone) {
+            drawCone(marker);
+        }
+        
+        // Draw the icon
         const img = new Image();
         img.src = marker.type;
         ctx.save();
@@ -210,8 +247,8 @@ function draw() {
         ctx.drawImage(img, -20, -20, 40, 40);
         ctx.restore();
 
+        // Draw rotation handle on top
         if (marker.showCone) {
-            drawCone(marker);
             drawRotationHandle(marker);
         }
     });
@@ -219,28 +256,41 @@ function draw() {
 
 function drawCone(marker) {
     const coneLength = 50;
-    const coneAngle = Math.PI / 4;
+    const coneAngle = Math.PI / 4; // 45 degrees
+    
     ctx.save();
     ctx.translate(marker.x, marker.y);
     ctx.rotate(marker.rotation);
+    
     ctx.beginPath();
     ctx.moveTo(0, 0);
     ctx.lineTo(coneLength, -coneLength * Math.tan(coneAngle / 2));
     ctx.lineTo(coneLength, coneLength * Math.tan(coneAngle / 2));
     ctx.closePath();
+    
     ctx.fillStyle = "rgba(255, 255, 0, 0.3)";
     ctx.fill();
+    ctx.strokeStyle = "rgba(255, 255, 0, 0.6)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    
     ctx.restore();
 }
 
 function drawRotationHandle(marker) {
     const handleDistance = 30;
+    
     ctx.save();
     ctx.translate(marker.x, marker.y);
     ctx.rotate(marker.rotation);
+    
     ctx.beginPath();
     ctx.arc(handleDistance, 0, 5, 0, Math.PI * 2);
     ctx.fillStyle = "red";
     ctx.fill();
+    ctx.strokeStyle = "darkred";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    
     ctx.restore();
 }
