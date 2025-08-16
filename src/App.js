@@ -3,19 +3,14 @@ import html2canvas from "html2canvas";
 
 // ---------- Cone SVG helper (45° total angle, soft fade) ----------
 function ConeSVG({ length = 140, angle = 45, color = "rgba(0,200,0,0.35)" }) {
-  // angle is the full wedge; we compute the two rays around forward/up
   const half = angle / 2;
   const rad = (deg) => (deg * Math.PI) / 180;
 
-  // We define "forward" as up (-Y). Rays go to -Y rotated by ±half.
-  // Endpoint coordinates with apex at (0,0)
   const x1 = Math.sin(rad(-half)) * length;
   const y1 = -Math.cos(rad(-half)) * length;
   const x2 = Math.sin(rad(half)) * length;
   const y2 = -Math.cos(rad(half)) * length;
 
-  // Use a gradient that fades out toward the base of the cone
-  // We'll draw a triangle path (apex->edge1->edge2->apex)
   return (
     <svg
       width={length * 2}
@@ -24,18 +19,13 @@ function ConeSVG({ length = 140, angle = 45, color = "rgba(0,200,0,0.35)" }) {
       style={{ display: "block", pointerEvents: "none" }}
     >
       <defs>
-        <linearGradient id="coneGrad" x1="0" y1="0" x2="0" y2="-1">
-          {/* The gradient technically uses objectBoundingBox units; we’ll
-              simulate a fade by using same alpha color near apex and
-              lower alpha near the base. */}
+        {/* NOTE: use y2="1" so objectBoundingBox gradient works top->bottom */}
+        <linearGradient id="coneGrad" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor={color} stopOpacity="0.6" />
           <stop offset="100%" stopColor={color} stopOpacity="0.0" />
         </linearGradient>
       </defs>
-      <path
-        d={`M 0 0 L ${x1} ${y1} L ${x2} ${y2} Z`}
-        fill="url(#coneGrad)"
-      />
+      <path d={`M 0 0 L ${x1} ${y1} L ${x2} ${y2} Z`} fill="url(#coneGrad)" />
     </svg>
   );
 }
@@ -62,7 +52,7 @@ export default function App() {
   const [selectedTypeId, setSelectedTypeId] = useState(null);
 
   // --- Placed markers (normalized coords 0..1)
-  // Add optional rotation (deg) for camera/projector; others can omit or be null.
+  // Add optional rotation (deg) for camera/projector; others can omit or null.
   const [placed, setPlaced] = useState([]); // {id, typeId, x, y, iconSrc, rotation?}
 
   // --- File inputs ---
@@ -73,7 +63,10 @@ export default function App() {
   const [exportFilename, setExportFilename] = useState("layout");
 
   // --- Drag state (move markers) ---
+  // pending: pointerdown happened on a marker but hasn't moved far yet
+  // active: actual drag in progress
   const dragState = useRef({
+    pending: false,
     active: false,
     id: null,
     startX: 0,
@@ -153,8 +146,12 @@ export default function App() {
             x: m.x,
             y: m.y,
             iconSrc: markerTypes.find((t) => t.id === m.typeId)?.iconSrc,
-            // Keep rotation if present; default 0 for cone-capable types
-            rotation: typeof m.rotation === "number" ? m.rotation : (isConeType(m.typeId) ? 0 : null),
+            rotation:
+              typeof m.rotation === "number"
+                ? m.rotation
+                : isConeType(m.typeId)
+                ? 0
+                : null,
           }))
         );
       } catch (err) {
@@ -285,43 +282,52 @@ export default function App() {
     ]);
   };
 
-  const startDrag = (id, e) => {
+  // Begin a pending drag (do not immediately set pointer capture)
+  const beginPendingDrag = (id, e) => {
     if (!overlayRef.current) return;
 
-    // If the pointer was on the rotate handle, do not start a move drag
+    // Ignore rotate-handle pointerdowns here
     if (e.target.closest?.("[data-rotate-handle]")) return;
-
-    e.stopPropagation();
-    e.preventDefault();
 
     const marker = placed.find((m) => m.id === id);
     if (!marker) return;
 
-    const pointerId = e.pointerId;
-
     dragState.current = {
-      active: true,
+      pending: true,
+      active: false,
       id,
       startX: e.clientX,
       startY: e.clientY,
       initialX: marker.x,
       initialY: marker.y,
       moved: false,
-      pointerId,
+      pointerId: e.pointerId,
     };
 
-    // capture so we keep receiving events even if the pointer leaves the overlay
+    // NOTE: do NOT call preventDefault() or setPointerCapture here; we want the
+    // quick tap to be allowed through to become a click (handled on pointerup).
+  };
+
+  // startRotate is kept (when user grabs the rotate handle)
+  const startRotate = (markerId, e) => {
+    if (!overlayRef.current) return;
+    e.stopPropagation();
+    e.preventDefault();
+
+    setActiveRotateId(markerId);
+
+    const pointerId = e.pointerId;
+    rotateState.current = { active: true, id: markerId, pointerId };
     try {
       overlayRef.current.setPointerCapture(pointerId);
     } catch {}
   };
 
+  // pointer move: handle rotation first, then potential pending->active drag, then active drag
   const onPointerMove = (e) => {
     // Rotation drag
     if (rotateState.current.active && overlayRef.current) {
       const rect = overlayRef.current.getBoundingClientRect();
-
-      // find the marker center in client coords
       const marker = placed.find((m) => m.id === rotateState.current.id);
       if (marker) {
         const cx = rect.left + marker.x * rect.width;
@@ -330,22 +336,35 @@ export default function App() {
         const dx = e.clientX - cx;
         const dy = e.clientY - cy;
 
-        // Angle where 0° is up (-Y). atan2 returns angle from +X axis; convert:
         const angleFromX = (Math.atan2(dy, dx) * 180) / Math.PI;
-        const angleUp = angleFromX - 90; // rotate so 0° is up
-        const normalized =
-          ((angleUp % 360) + 360) % 360; // keep in [0,360)
+        const angleUp = angleFromX - 90; // so 0° is up
+        const normalized = ((angleUp % 360) + 360) % 360;
 
         setPlaced((list) =>
-          list.map((m) =>
-            m.id === marker.id ? { ...m, rotation: normalized } : m
-          )
+          list.map((m) => (m.id === marker.id ? { ...m, rotation: normalized } : m))
         );
       }
-      return; // don't treat as a move drag simultaneously
+      return;
     }
 
-    // Move drag
+    // If we have only a pending drag and the pointer hasn't moved enough, check threshold
+    if (dragState.current.pending && !dragState.current.active) {
+      const dxPx = Math.abs(e.clientX - dragState.current.startX);
+      const dyPx = Math.abs(e.clientY - dragState.current.startY);
+      if (dxPx > 4 || dyPx > 4) {
+        // Promote to active drag
+        dragState.current.active = true;
+        dragState.current.moved = true;
+        try {
+          overlayRef.current.setPointerCapture(dragState.current.pointerId);
+        } catch {}
+      } else {
+        // still a tap candidate — do not update location yet
+        return;
+      }
+    }
+
+    // Move drag (active)
     if (!dragState.current.active || !overlayRef.current) return;
 
     const rect = overlayRef.current.getBoundingClientRect();
@@ -353,10 +372,7 @@ export default function App() {
     const dy = (e.clientY - dragState.current.startY) / rect.height;
 
     if (!dragState.current.moved) {
-      if (
-        Math.abs(e.clientX - dragState.current.startX) > 2 ||
-        Math.abs(e.clientY - dragState.current.startY) > 2
-      ) {
+      if (Math.abs(e.clientX - dragState.current.startX) > 2 || Math.abs(e.clientY - dragState.current.startY) > 2) {
         dragState.current.moved = true;
       }
     }
@@ -373,6 +389,7 @@ export default function App() {
     );
   };
 
+  // endDrag handles rotation end, pending-click (toggle rotate), and finishing active drag
   const endDrag = (e) => {
     // finish rotation drag?
     if (rotateState.current.active) {
@@ -388,7 +405,33 @@ export default function App() {
       return;
     }
 
+    // If it was a pending tap (no move) -> treat as click / toggle rotate (if cone)
+    if (dragState.current.pending && !dragState.current.active && !dragState.current.moved) {
+      const id = dragState.current.id;
+      const marker = placed.find((m) => m.id === id);
+      // e.detail === 1 => first click (not the second click of a dblclick)
+      if (marker && isConeType(marker.typeId) && e.detail === 1) {
+        // toggle rotate handle
+        setActiveRotateId((cur) => (cur === id ? null : id));
+      }
+      // Reset pending drag
+      dragState.current = {
+        pending: false,
+        active: false,
+        id: null,
+        startX: 0,
+        startY: 0,
+        initialX: 0,
+        initialY: 0,
+        moved: false,
+        pointerId: null,
+      };
+      return;
+    }
+
+    // finish an active move drag
     if (!dragState.current.active) return;
+
     e.stopPropagation();
     e.preventDefault();
 
@@ -406,6 +449,7 @@ export default function App() {
     } catch {}
 
     dragState.current = {
+      pending: false,
       active: false,
       id: null,
       startX: 0,
@@ -420,21 +464,6 @@ export default function App() {
   const removeMarker = (id) => {
     setPlaced((list) => list.filter((m) => m.id !== id));
     if (activeRotateId === id) setActiveRotateId(null);
-  };
-
-  // Begin rotating when user drags the handle
-  const startRotate = (markerId, e) => {
-    if (!overlayRef.current) return;
-    e.stopPropagation();
-    e.preventDefault();
-
-    setActiveRotateId(markerId);
-
-    const pointerId = e.pointerId;
-    rotateState.current = { active: true, id: markerId, pointerId };
-    try {
-      overlayRef.current.setPointerCapture(pointerId);
-    } catch {}
   };
 
   // -------------- UI --------------
@@ -541,11 +570,7 @@ export default function App() {
               }}
             >
               {m.iconSrc && (
-                <img
-                  src={m.iconSrc}
-                  alt={m.label}
-                  style={{ width: 24, height: 24 }}
-                />
+                <img src={m.iconSrc} alt={m.label} style={{ width: 24, height: 24 }} />
               )}
             </button>
           );
@@ -583,9 +608,7 @@ export default function App() {
                 cursor: "pointer",
               }}
             >
-              <div style={{ fontSize: 44, color: "#1976d2", marginBottom: 8 }}>
-                ☁️
-              </div>
+              <div style={{ fontSize: 44, color: "#1976d2", marginBottom: 8 }}>☁️</div>
               <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 4 }}>
                 Upload Floorplan
               </div>
@@ -658,14 +681,13 @@ export default function App() {
                 // Placement on click (suppressed if just dragged)
                 onClick={placeMarkerAtEvent}
                 onPointerDown={(e) => {
-                  // If pointer is on rotate handle, begin rotation instead of drag
                   const handleEl = e.target.closest?.("[data-rotate-handle]");
                   if (handleEl) {
                     startRotate(handleEl.getAttribute("data-marker-id"), e);
                     return;
                   }
                   const marker = e.target.closest?.("[data-marker-id]");
-                  if (marker) startDrag(marker.dataset.markerId, e);
+                  if (marker) beginPendingDrag(marker.dataset.markerId, e);
                 }}
                 onPointerMove={onPointerMove}
                 onPointerUp={endDrag}
@@ -703,13 +725,7 @@ export default function App() {
                       key={m.id}
                       data-marker-id={m.id}
                       onDoubleClick={() => removeMarker(m.id)}
-                      onClick={(e) => {
-                        // Toggle rotate handle only for cone-capable types
-                        if (!showCone) return;
-                        if (justDraggedRef.current) return;
-                        e.stopPropagation();
-                        setActiveRotateId((cur) => (cur === m.id ? null : m.id));
-                      }}
+                      // NOTE: removed onClick toggling; toggling handled on pointerup
                       style={{
                         position: "absolute",
                         left: `${m.x * 100}%`,
@@ -740,11 +756,7 @@ export default function App() {
                             pointerEvents: "none",
                           }}
                         >
-                          <ConeSVG
-                            length={140}
-                            angle={45}
-                            color={coneColorFor(m.typeId)}
-                          />
+                          <ConeSVG length={140} angle={45} color={coneColorFor(m.typeId)} />
                         </div>
                       )}
 
