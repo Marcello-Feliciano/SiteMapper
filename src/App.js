@@ -47,6 +47,7 @@ export default function App() {
     { id: "tv", label: "TV", iconSrc: require("./assets/tv.png") },
     { id: "wifi", label: "Wi-Fi", iconSrc: require("./assets/wifi.png") },
     { id: "projector", label: "Proj", iconSrc: require("./assets/projector.png") },
+    { id: "speaker", label: "Speaker", iconSrc: require("./assets/speaker.png") },
   ];
   const [selectedTypeId, setSelectedTypeId] = useState(null);
 
@@ -117,7 +118,7 @@ export default function App() {
       img.src = src;
     });
 
-  const isConeType = (typeId) => typeId === "camera" || typeId === "projector";
+  const isConeType = (typeId) => typeId === "camera" || typeId === "projector" || typeId === "speaker";
 
   const coneColorFor = (typeId) =>
     typeId === "projector" ? "rgba(255, 204, 0, 0.35)" : "rgba(0, 200, 0, 0.35)";
