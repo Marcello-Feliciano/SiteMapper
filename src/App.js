@@ -19,7 +19,6 @@ function ConeSVG({ length = 140, angle = 45, color = "rgba(0,200,0,0.35)" }) {
       style={{ display: "block", pointerEvents: "none" }}
     >
       <defs>
-        {/* NOTE: use y2="1" so objectBoundingBox gradient works top->bottom */}
         <linearGradient id="coneGrad" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor={color} stopOpacity="0.6" />
           <stop offset="100%" stopColor={color} stopOpacity="0.0" />
@@ -52,7 +51,6 @@ export default function App() {
   const [selectedTypeId, setSelectedTypeId] = useState(null);
 
   // --- Placed markers (normalized coords 0..1)
-  // Add optional rotation (deg) for camera/projector; others can omit or null.
   const [placed, setPlaced] = useState([]); // {id, typeId, x, y, iconSrc, rotation?}
 
   // --- File inputs ---
@@ -245,19 +243,16 @@ export default function App() {
   // -------------- Placement + dragging --------------
 
   const placeMarkerAtEvent = (e) => {
-    // If we clicked empty space and no marker type selected, just clear rotation handle
     if (!getSelectedType() && !e.target.closest?.("[data-marker-id]")) {
       setActiveRotateId(null);
     }
 
     if (!getSelectedType() || !overlayRef.current) return;
 
-    // Don't place if the click was on an existing marker or the rotate handle
     const onMarker = e.target.closest?.("[data-marker-id]");
     const onRotate = e.target.closest?.("[data-rotate-handle]");
     if (onMarker || onRotate) return;
 
-    // Don't place if we just completed a drag
     if (justDraggedRef.current) {
       justDraggedRef.current = false;
       return;
@@ -303,17 +298,16 @@ export default function App() {
       moved: false,
       pointerId: e.pointerId,
     };
-
-    // NOTE: do NOT call preventDefault() or setPointerCapture here; we want the
-    // quick tap to be allowed through to become a click (handled on pointerup).
+    // do not call preventDefault or setPointerCapture here so clicks fire
   };
 
-  // startRotate is kept (when user grabs the rotate handle)
+  // Begin rotating when user drags the handle
   const startRotate = (markerId, e) => {
     if (!overlayRef.current) return;
     e.stopPropagation();
     e.preventDefault();
 
+    // ensure visible (harmless if already visible)
     setActiveRotateId(markerId);
 
     const pointerId = e.pointerId;
@@ -347,7 +341,7 @@ export default function App() {
       return;
     }
 
-    // If we have only a pending drag and the pointer hasn't moved enough, check threshold
+    // If we have a pending pointerdown, promote if moved enough
     if (dragState.current.pending && !dragState.current.active) {
       const dxPx = Math.abs(e.clientX - dragState.current.startX);
       const dyPx = Math.abs(e.clientY - dragState.current.startY);
@@ -389,7 +383,7 @@ export default function App() {
     );
   };
 
-  // endDrag handles rotation end, pending-click (toggle rotate), and finishing active drag
+  // endDrag handles rotation end, pending-click reset, and finishing active drag
   const endDrag = (e) => {
     // finish rotation drag?
     if (rotateState.current.active) {
@@ -405,16 +399,9 @@ export default function App() {
       return;
     }
 
-    // If it was a pending tap (no move) -> treat as click / toggle rotate (if cone)
+    // If it was a pending tap (no move) -> do nothing here; click handler on marker handles toggle
     if (dragState.current.pending && !dragState.current.active && !dragState.current.moved) {
-      const id = dragState.current.id;
-      const marker = placed.find((m) => m.id === id);
-      // e.detail === 1 => first click (not the second click of a dblclick)
-      if (marker && isConeType(marker.typeId) && e.detail === 1) {
-        // toggle rotate handle
-        setActiveRotateId((cur) => (cur === id ? null : id));
-      }
-      // Reset pending drag
+      // reset pending state; onClick will already have fired (toggle handled there)
       dragState.current = {
         pending: false,
         active: false,
@@ -697,6 +684,7 @@ export default function App() {
                   inset: 0,
                   borderRadius: 8,
                   pointerEvents: "auto",
+                  touchAction: "none", // important for touch-to-drag behavior
                 }}
               >
                 {/* Markers layer */}
@@ -725,7 +713,13 @@ export default function App() {
                       key={m.id}
                       data-marker-id={m.id}
                       onDoubleClick={() => removeMarker(m.id)}
-                      // NOTE: removed onClick toggling; toggling handled on pointerup
+                      onClick={(e) => {
+                        // Toggle rotate handle only for cone-capable types
+                        if (!showCone) return;
+                        if (justDraggedRef.current) return;
+                        e.stopPropagation();
+                        setActiveRotateId((cur) => (cur === m.id ? null : m.id));
+                      }}
                       style={{
                         position: "absolute",
                         left: `${m.x * 100}%`,
