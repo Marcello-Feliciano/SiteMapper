@@ -693,49 +693,49 @@ export default function App() {
               >
                 {/* Markers layer */}
                 {placed.map((m) => {
-  const type = markerTypes.find((t) => t.id === m.typeId);
-  const showCone = isConeType(m.typeId);
-  const rotation = typeof m.rotation === "number" ? m.rotation : 0;
+                  const type = markerTypes.find((t) => t.id === m.typeId);
+                  const showCone = isConeType(m.typeId);
+                  const rotation = typeof m.rotation === "number" ? m.rotation : 0;
 
-  return (
-    <div
-      key={m.id}
-      data-marker-id={m.id}
-      onDoubleClick={() => removeMarker(m.id)}
-      onClick={(e) => {
-        if (!showCone) return;
-        if (justDraggedRef.current) return;
-        e.stopPropagation();
-        setActiveRotateId((cur) => (cur === m.id ? null : m.id));
-      }}
-      style={{
-        position: "absolute",
-        left: `${m.x * 100}%`,
-        top: `${m.y * 100}%`,
-        transform: "translate(-50%, -50%)",
-        cursor: "grab",
-        userSelect: "none",
-        touchAction: "none",
-        background: "transparent",
-        padding: 0,
-        boxShadow: "none",
-      }}
-    >
-      {/* Cone behind icon */}
-      {showCone && (
-        <div
-          style={{
-            position: "absolute",
-            left: "50%",
-            top: "50%",
-            transform: `translate(-50%,-50%) rotate(${rotation}deg)`,
-            transformOrigin: "50% 50%",
-            pointerEvents: "none",
-          }}
-        >
-          <ConeSVG length={140} angle={45} color={coneColorFor(m.typeId)} />
-        </div>
-      )}
+                  return (
+                    <div
+                      key={m.id}
+                      data-marker-id={m.id}
+                      onDoubleClick={() => removeMarker(m.id)}
+                      onClick={(e) => {
+                        if (!showCone) return;
+                        if (justDraggedRef.current) return;
+                        e.stopPropagation();
+                        setActiveRotateId((cur) => (cur === m.id ? null : m.id));
+                      }}
+                      style={{
+                        position: "absolute",
+                        left: `${m.x * 100}%`,
+                        top: `${m.y * 100}%`,
+                        transform: "translate(-50%, -50%)",
+                        cursor: "grab",
+                        userSelect: "none",
+                        touchAction: "none",
+                        background: "transparent",
+                        padding: 0,
+                        boxShadow: "none",
+                      }}
+                    >
+                      {/* Cone behind icon */}
+                      {showCone && (
+                        <div
+                          style={{
+                            position: "absolute",
+                            left: "50%",
+                            top: "50%",
+                            transform: `translate(-50%,-50%) rotate(${rotation}deg)`,
+                            transformOrigin: "50% 50%",
+                            pointerEvents: "none",
+                          }}
+                        >
+                          <ConeSVG length={140} angle={45} color={coneColorFor(m.typeId)} />
+                        </div>
+                      )}
 
       {/* Icon wrapper */}
       <div
@@ -784,6 +784,9 @@ export default function App() {
           }}
         />
       )}
+    </div>   {/* ✅ THIS was missing */}
+  );
+})}
 
       </main>
 
