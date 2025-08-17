@@ -759,7 +759,32 @@ export default function App() {
                       )}
 
                       {/* Icon (above) */}
-                      <div style={{ position: "relative", zIndex: 1 }}>{content}</div>
+                      {/* Icon (above) */}
+<div
+  style={{
+    position: "relative",
+    zIndex: 1,
+    width: 32,
+    height: 32,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    pointerEvents: "none",
+  }}
+>
+  {type?.iconSrc && (
+    <img
+      src={type.iconSrc}
+      alt={type?.label || "icon"}
+      style={{
+        maxWidth: "100%",
+        maxHeight: "100%",
+        display: "block",
+      }}
+    />
+  )}
+</div>
+
 
                       {/* Rotation handle (visible when active) */}
                       {showCone && activeRotateId === m.id && (
