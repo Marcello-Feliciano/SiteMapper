@@ -1,5 +1,14 @@
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import html2canvas from "html2canvas";
+
+// ---- Tunables for consistent sizing (CSS render size; normalization is independent) ----
+const PALETTE_IMG_PX = 24; // icon inside the palette buttons
+const MARKER_IMG_PX = 32;  // icon size when placed on the floorplan
+
+// ---- Normalization canvas size (internal) ----
+const NORMALIZED_BASE = 256;     // draw normalized icons at high res, then scale down via CSS
+const PADDING_RATIO = 0.15;      // 15% uniform padding after trimming transparent edges
+const ALPHA_THRESHOLD = 10;      // pixels with alpha <= this are considered transparent
 
 // ---------- Cone SVG helper (45° total angle, soft fade) ----------
 function ConeSVG({ length = 140, angle = 45, color = "rgba(0,200,0,0.35)" }) {
@@ -29,54 +38,81 @@ function ConeSVG({ length = 140, angle = 45, color = "rgba(0,200,0,0.35)" }) {
   );
 }
 
-/** ---------- NEW: Tiny, self-contained IconMenu (optional) ----------
- * - Renders your existing markerTypes in a neat grid
- * - Clicking an icon calls onAdd(typeId) to drop it at the image center
- * - This does NOT replace your palette; it’s an optional quick-add tool
- */
-function IconMenu({ markerTypes, onAdd }) {
-  return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fill, 50px)",
-        gap: 10,
-        padding: "8px 0",
-      }}
-    >
-      {markerTypes.map((m) => (
-        <button
-          key={m.id}
-          onClick={() => onAdd(m.id)}
-          title={`Quick add ${m.label}`}
-          style={{
-            width: 50,
-            height: 50,
-            borderRadius: 10,
-            border: "1px solid #c9d6ea",
-            background: "#fff",
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            cursor: "pointer",
-          }}
-        >
-          {m.iconSrc && (
-            <img
-              src={m.iconSrc}
-              alt={m.label}
-              style={{
-                width: 40,
-                height: 40,
-                objectFit: "contain",
-                display: "block",
-              }}
-            />
-          )}
-        </button>
-      ))}
-    </div>
+// ---- Image helpers: load, trim transparent edges, pad to square, return dataURL ----
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    // For local webpack assets (require("./assets/...")), crossorigin is not needed.
+    img.onload = () => resolve(img);
+    img.onerror = (e) => reject(e || new Error("Failed to load image"));
+    img.src = src;
+  });
+}
+
+async function normalizeIcon(src) {
+  const img = await loadImage(src);
+  const w = Math.max(1, img.naturalWidth || img.width);
+  const h = Math.max(1, img.naturalHeight || img.height);
+
+  // Draw original to temp canvas
+  const c1 = document.createElement("canvas");
+  c1.width = w;
+  c1.height = h;
+  const g1 = c1.getContext("2d");
+  g1.drawImage(img, 0, 0);
+
+  const { data } = g1.getImageData(0, 0, w, h);
+  // Find non-transparent bounding box
+  let minX = w, minY = h, maxX = -1, maxY = -1;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const a = data[(y * w + x) * 4 + 3];
+      if (a > ALPHA_THRESHOLD) {
+        if (x < minX) minX = x;
+        if (y < minY) minY = y;
+        if (x > maxX) maxX = x;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+
+  // If fully transparent for some reason, just return original
+  if (maxX < minX || maxY < minY) {
+    return src;
+  }
+
+  const bboxW = maxX - minX + 1;
+  const bboxH = maxY - minY + 1;
+
+  // Prepare normalized square canvas
+  const out = document.createElement("canvas");
+  out.width = NORMALIZED_BASE;
+  out.height = NORMALIZED_BASE;
+  const gout = out.getContext("2d");
+
+  // Target inner area after padding
+  const pad = Math.round(NORMALIZED_BASE * PADDING_RATIO);
+  const innerW = NORMALIZED_BASE - pad * 2;
+  const innerH = NORMALIZED_BASE - pad * 2;
+
+  const scale = Math.min(innerW / bboxW, innerH / bboxH);
+  const drawW = Math.round(bboxW * scale);
+  const drawH = Math.round(bboxH * scale);
+
+  const dx = Math.round((NORMALIZED_BASE - drawW) / 2);
+  const dy = Math.round((NORMALIZED_BASE - drawH) / 2);
+
+  gout.clearRect(0, 0, out.width, out.height);
+  gout.imageSmoothingEnabled = true;
+  gout.imageSmoothingQuality = "high";
+
+  gout.drawImage(
+    c1,
+    minX, minY, bboxW, bboxH,   // src rect (trimmed)
+    dx, dy, drawW, drawH        // dest rect (centered with uniform padding)
   );
+
+  return out.toDataURL("image/png");
 }
 
 export default function App() {
@@ -85,12 +121,12 @@ export default function App() {
   const imgRef = useRef(null);
   const stageRef = useRef(null);
 
-  // wrapper & overlay so markers align 1:1 with the displayed image box
+  // NEW: wrapper & overlay so markers align 1:1 with the displayed image box
   const imageWrapRef = useRef(null);
   const overlayRef = useRef(null);
 
   // --- Marker palette + selection ---
-  const markerTypes = [
+  const baseMarkerTypes = [
     { id: "camera", label: "Camera", iconSrc: require("./assets/camera.png") },
     { id: "door", label: "Door", iconSrc: require("./assets/door.png") },
     { id: "cardreader", label: "Card", iconSrc: require("./assets/card.png") },
@@ -103,11 +139,11 @@ export default function App() {
   ];
   const [selectedTypeId, setSelectedTypeId] = useState(null);
 
-  // Optional: show/hide the quick-add IconMenu (default off to not change your UI)
-  const [showQuickAdd, setShowQuickAdd] = useState(false);
+  // Normalized icons map: { [typeId]: dataURL }
+  const [normIcons, setNormIcons] = useState({});
 
   // --- Placed markers (normalized coords 0..1)
-  // {id, typeId, x, y, iconSrc, rotation?}
+  // {id, typeId, x, y, iconSrc?, rotation?}
   const [placed, setPlaced] = useState([]);
 
   // --- File inputs ---
@@ -141,10 +177,39 @@ export default function App() {
   // suppress a click right after dragging so we don't place a new marker
   const justDraggedRef = useRef(false);
 
-  // -------------- Helpers --------------
+  // -------------- Normalize icons once on mount --------------
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const entries = await Promise.all(
+        baseMarkerTypes.map(async (t) => {
+          try {
+            const normalized = await normalizeIcon(t.iconSrc);
+            return [t.id, normalized];
+          } catch {
+            return [t.id, t.iconSrc]; // fallback to original on error
+          }
+        })
+      );
+      if (mounted) {
+        const map = {};
+        for (const [id, src] of entries) map[id] = src;
+        setNormIcons(map);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []); // run once
 
+  // -------------- Helpers --------------
   const getSelectedType = () =>
-    markerTypes.find((m) => m.id === selectedTypeId) || null;
+    baseMarkerTypes.find((m) => m.id === selectedTypeId) || null;
+
+  const getIconSrcForType = (typeId) =>
+    normIcons[typeId] ||
+    baseMarkerTypes.find((t) => t.id === typeId)?.iconSrc ||
+    null;
 
   const readFileAsDataURL = (file) =>
     new Promise((resolve, reject) => {
@@ -179,7 +244,6 @@ export default function App() {
     typeId === "projector" ? "rgba(255, 204, 0, 0.35)" : "rgba(0, 200, 0, 0.35)";
 
   // -------------- Import --------------
-
   const handleImportClick = () => importInputRef.current?.click();
 
   const handleImportChange = async (e) => {
@@ -199,7 +263,7 @@ export default function App() {
             typeId: m.typeId,
             x: m.x,
             y: m.y,
-            iconSrc: markerTypes.find((t) => t.id === m.typeId)?.iconSrc,
+            // keep rotation if present; ignore saved iconSrc because we always render normalized
             rotation:
               typeof m.rotation === "number"
                 ? m.rotation
@@ -223,7 +287,6 @@ export default function App() {
   };
 
   // -------------- Export --------------
-
   const exportJSONandPNG = async (filenameBase) => {
     if (!imageSrc || !stageRef.current || !imgRef.current) return;
 
@@ -244,8 +307,10 @@ export default function App() {
         typeId: m.typeId,
         x: m.x,
         y: m.y,
-        iconSrc: m.iconSrc,
+        // Persist rotation if any
         ...(typeof m.rotation === "number" ? { rotation: m.rotation } : {}),
+        // store the normalized icon for portability (optional)
+        iconSrc: getIconSrcForType(m.typeId),
       })),
     };
     const jsonBlob = new Blob([JSON.stringify(json, null, 2)], {
@@ -291,35 +356,11 @@ export default function App() {
   };
 
   // -------------- Marker palette --------------
-
   const toggleSelectType = (typeId) => {
     setSelectedTypeId((cur) => (cur === typeId ? null : typeId));
   };
 
-  // ---------- NEW: quick add handler (uses existing 'placed' state) ----------
-  const handleQuickAddMarker = (typeId) => {
-    const type = markerTypes.find((t) => t.id === typeId);
-    if (!type) return;
-
-    // Default to center of the image (normalized coords)
-    const x = 0.5;
-    const y = 0.5;
-
-    setPlaced((list) => [
-      ...list,
-      {
-        id: crypto.randomUUID(),
-        typeId: type.id,
-        x,
-        y,
-        iconSrc: type.iconSrc,
-        rotation: isConeType(type.id) ? 0 : null,
-      },
-    ]);
-  };
-
   // -------------- Placement + dragging --------------
-
   const placeMarkerAtEvent = (e) => {
     if (!getSelectedType() && !e.target.closest?.("[data-marker-id]")) {
       setActiveRotateId(null);
@@ -349,17 +390,13 @@ export default function App() {
         typeId: type.id,
         x,
         y,
-        iconSrc: type.iconSrc,
         rotation: isConeType(type.id) ? 0 : null,
       },
     ]);
   };
 
-  // Begin a pending drag (do not immediately set pointer capture)
   const beginPendingDrag = (id, e) => {
     if (!overlayRef.current) return;
-
-    // Ignore rotate-handle pointerdowns here
     if (e.target.closest?.("[data-rotate-handle]")) return;
 
     const marker = placed.find((m) => m.id === id);
@@ -376,16 +413,13 @@ export default function App() {
       moved: false,
       pointerId: e.pointerId,
     };
-    // do not call preventDefault or setPointerCapture here so clicks fire
   };
 
-  // Begin rotating when user drags the handle
   const startRotate = (markerId, e) => {
     if (!overlayRef.current) return;
     e.stopPropagation();
     e.preventDefault();
 
-    // ensure visible (harmless if already visible)
     setActiveRotateId(markerId);
 
     const pointerId = e.pointerId;
@@ -395,7 +429,6 @@ export default function App() {
     } catch {}
   };
 
-  // pointer move: handle rotation first, then potential pending->active drag, then active drag
   const onPointerMove = (e) => {
     // Rotation drag
     if (rotateState.current.active && overlayRef.current) {
@@ -419,19 +452,17 @@ export default function App() {
       return;
     }
 
-    // If we have a pending pointerdown, promote if moved enough
+    // Promote pending -> active drag
     if (dragState.current.pending && !dragState.current.active) {
       const dxPx = Math.abs(e.clientX - dragState.current.startX);
       const dyPx = Math.abs(e.clientY - dragState.current.startY);
       if (dxPx > 4 || dyPx > 4) {
-        // Promote to active drag
         dragState.current.active = true;
         dragState.current.moved = true;
         try {
           overlayRef.current.setPointerCapture(dragState.current.pointerId);
         } catch {}
       } else {
-        // still a tap candidate — do not update location yet
         return;
       }
     }
@@ -464,7 +495,6 @@ export default function App() {
     );
   };
 
-  // endDrag handles rotation end, pending-click reset, and finishing active drag
   const endDrag = (e) => {
     // finish rotation drag?
     if (rotateState.current.active) {
@@ -474,15 +504,13 @@ export default function App() {
         }
       } catch {}
       rotateState.current = { active: false, id: null, pointerId: null };
-      // prevent accidental placement
       justDraggedRef.current = true;
       setTimeout(() => (justDraggedRef.current = false), 0);
       return;
     }
 
-    // If it was a pending tap (no move) -> do nothing here; click handler on marker handles toggle
+    // If it was a pending tap (no move)
     if (dragState.current.pending && !dragState.current.active && !dragState.current.moved) {
-      // reset pending state; onClick will already have fired (toggle handled there)
       dragState.current = {
         pending: false,
         active: false,
@@ -535,7 +563,6 @@ export default function App() {
   };
 
   // -------------- UI --------------
-
   return (
     <div
       style={{
@@ -616,8 +643,9 @@ export default function App() {
         }}
       >
         <div style={{ fontWeight: 600, color: "#365" }}>Markers:</div>
-        {markerTypes.map((m) => {
+        {baseMarkerTypes.map((m) => {
           const selected = selectedTypeId === m.id;
+          const src = getIconSrcForType(m.id);
           return (
             <button
               key={m.id}
@@ -633,15 +661,20 @@ export default function App() {
                 border: selected ? "2px solid #1976d2" : "1px solid #c9d6ea",
                 background: selected ? "rgba(25,118,210,0.08)" : "#fff",
                 cursor: "pointer",
-                fontSize: 22,
                 userSelect: "none",
               }}
             >
-              {m.iconSrc && (
+              {src && (
                 <img
-                  src={m.iconSrc}
+                  src={src}
                   alt={m.label}
-                  style={{ width: 24, height: 24, objectFit: "contain" }}
+                  style={{
+                    width: PALETTE_IMG_PX,
+                    height: PALETTE_IMG_PX,
+                    objectFit: "contain",
+                    display: "block",
+                  }}
+                  draggable={false}
                 />
               )}
             </button>
@@ -662,40 +695,7 @@ export default function App() {
             Deselect
           </button>
         )}
-
-        {/* ---------- NEW: Toggleable Quick Add (doesn't change your existing UX) ---------- */}
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
-          <button
-            onClick={() => setShowQuickAdd((s) => !s)}
-            style={{
-              padding: "6px 10px",
-              borderRadius: 8,
-              border: "1px solid #c9d6ea",
-              background: "#fff",
-              cursor: "pointer",
-            }}
-            title="Click an icon to place it at the image center"
-          >
-            {showQuickAdd ? "Hide Quick Add" : "Show Quick Add"}
-          </button>
-        </div>
       </div>
-
-      {/* NEW: Quick Add grid (collapsible) */}
-      {showQuickAdd && (
-        <div
-          style={{
-            padding: "8px 16px",
-            background: "#f7f9fe",
-            borderBottom: "1px solid #dde5f1",
-          }}
-        >
-          <div style={{ fontSize: 13, color: "#556", marginBottom: 6 }}>
-            Quick Add (click an icon to drop it at the center)
-          </div>
-          <IconMenu markerTypes={markerTypes} onAdd={handleQuickAddMarker} />
-        </div>
-      )}
 
       {/* Main content */}
       <main style={{ padding: 16, display: "flex", justifyContent: "center" }}>
@@ -749,7 +749,7 @@ export default function App() {
               border: "1px solid #e2e8f0",
               borderRadius: 12,
               boxShadow: "0 8px 24px rgba(16,24,40,.06)",
-              padding: 8, // this padding no longer throws markers off
+              padding: 8,
               maxWidth: "min(95vw, 1200px)",
               overflow: "auto",
               touchAction: "none",
@@ -783,7 +783,6 @@ export default function App() {
               {/* Overlay covers exactly the rendered image area */}
               <div
                 ref={overlayRef}
-                // Placement on click (suppressed if just dragged)
                 onClick={placeMarkerAtEvent}
                 onPointerDown={(e) => {
                   const handleEl = e.target.closest?.("[data-rotate-handle]");
@@ -802,29 +801,14 @@ export default function App() {
                   inset: 0,
                   borderRadius: 8,
                   pointerEvents: "auto",
-                  touchAction: "none", // important for touch-to-drag behavior
+                  touchAction: "none",
                 }}
               >
                 {/* Markers layer */}
                 {placed.map((m) => {
-                  const type = markerTypes.find((t) => t.id === m.typeId);
                   const showCone = isConeType(m.typeId);
                   const rotation = typeof m.rotation === "number" ? m.rotation : 0;
-
-                  const content = type?.iconSrc ? (
-                    <img
-                      src={type.iconSrc}
-                      alt={type?.label || "icon"}
-                      style={{
-                        width: 32,
-                        height: 32,
-                        minWidth: 32,
-                        minHeight: 32,
-                        objectFit: "contain",
-                        pointerEvents: "none", // image itself doesn't steal events
-                      }}
-                    />
-                  ) : null;
+                  const iconSrc = getIconSrcForType(m.typeId);
 
                   return (
                     <div
@@ -832,7 +816,6 @@ export default function App() {
                       data-marker-id={m.id}
                       onDoubleClick={() => removeMarker(m.id)}
                       onClick={(e) => {
-                        // Toggle rotate handle only for cone-capable types
                         if (!showCone) return;
                         if (justDraggedRef.current) return;
                         e.stopPropagation();
@@ -873,14 +856,30 @@ export default function App() {
                       )}
 
                       {/* Icon (above) */}
-                      <div style={{ position: "relative", zIndex: 1 }}>{content}</div>
+                      {iconSrc && (
+                        <div style={{ position: "relative", zIndex: 1 }}>
+                          <img
+                            src={iconSrc}
+                            alt="icon"
+                            style={{
+                              width: MARKER_IMG_PX,
+                              height: MARKER_IMG_PX,
+                              minWidth: MARKER_IMG_PX,
+                              minHeight: MARKER_IMG_PX,
+                              objectFit: "contain",
+                              display: "block",
+                              pointerEvents: "none",
+                            }}
+                            draggable={false}
+                          />
+                        </div>
+                      )}
 
                       {/* Rotation handle (visible when active) */}
                       {showCone && activeRotateId === m.id && (
                         <div
                           data-rotate-handle
                           data-marker-id={m.id}
-                          // place the handle 70px away in the current cone direction
                           style={{
                             position: "absolute",
                             left: "50%",
