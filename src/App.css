@@ -52,3 +52,18 @@
   object-fit: contain; /* keep aspect ratio */
   cursor: grab;
 }
+
+/* Sidebar icons (grid menu) */
+.icon-grid img {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+}
+
+/* Placed markers */
+.marker {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+}
+
