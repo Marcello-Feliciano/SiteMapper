@@ -787,7 +787,6 @@ export default function App() {
     </div>
   );
 })
-{/
       </main>
 
       {/* Export filename modal */}
