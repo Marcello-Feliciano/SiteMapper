@@ -789,6 +789,7 @@ export default function App() {
 })}
 </div> {/* overlayRef */}
 </div> {/* imageWrapRef */}
+</div> {/* stageRef */}
       </main>
 
       {/* Export filename modal */}
