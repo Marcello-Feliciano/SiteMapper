@@ -703,7 +703,6 @@ export default function App() {
       data-marker-id={m.id}
       onDoubleClick={() => removeMarker(m.id)}
       onClick={(e) => {
-        // Toggle rotate handle only for cone-capable types
         if (!showCone) return;
         if (justDraggedRef.current) return;
         e.stopPropagation();
@@ -722,7 +721,7 @@ export default function App() {
         boxShadow: "none",
       }}
     >
-      {/* Cone (behind icon) */}
+      {/* Cone behind icon */}
       {showCone && (
         <div
           style={{
@@ -738,7 +737,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Icon wrapper (ensures uniform size) */}
+      {/* Icon wrapper */}
       <div
         style={{
           position: "relative",
@@ -764,7 +763,7 @@ export default function App() {
         )}
       </div>
 
-      {/* Rotation handle (visible when active) */}
+      {/* Rotation handle */}
       {showCone && activeRotateId === m.id && (
         <div
           data-rotate-handle
@@ -788,6 +787,7 @@ export default function App() {
     </div>
   );
 })}
+
 
       </main>
 
