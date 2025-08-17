@@ -697,21 +697,6 @@ export default function App() {
                   const showCone = isConeType(m.typeId);
                   const rotation = typeof m.rotation === "number" ? m.rotation : 0;
 
-                  const content = type?.iconSrc ? (
-                    <img
-                      src={type.iconSrc}
-                      alt={type?.label || "icon"}
-                      style={{
-                        width: 32,
-                        height: 32,
-                        minWidth: 32,
-                        minHeight: 32,
-                        objectFit: "contain",
-                        pointerEvents: "none", // image itself doesn't steal events
-                      }}
-                    />
-                  ) : null;
-
                   return (
                     <div
                       key={m.id}
