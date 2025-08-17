@@ -29,13 +29,63 @@ function ConeSVG({ length = 140, angle = 45, color = "rgba(0,200,0,0.35)" }) {
   );
 }
 
+/** ---------- NEW: Tiny, self-contained IconMenu (optional) ----------
+ * - Renders your existing markerTypes in a neat grid
+ * - Clicking an icon calls onAdd(typeId) to drop it at the image center
+ * - This does NOT replace your palette; it’s an optional quick-add tool
+ */
+function IconMenu({ markerTypes, onAdd }) {
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fill, 50px)",
+        gap: 10,
+        padding: "8px 0",
+      }}
+    >
+      {markerTypes.map((m) => (
+        <button
+          key={m.id}
+          onClick={() => onAdd(m.id)}
+          title={`Quick add ${m.label}`}
+          style={{
+            width: 50,
+            height: 50,
+            borderRadius: 10,
+            border: "1px solid #c9d6ea",
+            background: "#fff",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: "pointer",
+          }}
+        >
+          {m.iconSrc && (
+            <img
+              src={m.iconSrc}
+              alt={m.label}
+              style={{
+                width: 40,
+                height: 40,
+                objectFit: "contain",
+                display: "block",
+              }}
+            />
+          )}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function App() {
   // --- Image + layout state ---
   const [imageSrc, setImageSrc] = useState(null); // dataURL of uploaded image
   const imgRef = useRef(null);
   const stageRef = useRef(null);
 
-  // NEW: wrapper & overlay so markers align 1:1 with the displayed image box
+  // wrapper & overlay so markers align 1:1 with the displayed image box
   const imageWrapRef = useRef(null);
   const overlayRef = useRef(null);
 
@@ -53,8 +103,12 @@ export default function App() {
   ];
   const [selectedTypeId, setSelectedTypeId] = useState(null);
 
+  // Optional: show/hide the quick-add IconMenu (default off to not change your UI)
+  const [showQuickAdd, setShowQuickAdd] = useState(false);
+
   // --- Placed markers (normalized coords 0..1)
-  const [placed, setPlaced] = useState([]); // {id, typeId, x, y, iconSrc, rotation?}
+  // {id, typeId, x, y, iconSrc, rotation?}
+  const [placed, setPlaced] = useState([]);
 
   // --- File inputs ---
   const importInputRef = useRef(null);
@@ -64,8 +118,6 @@ export default function App() {
   const [exportFilename, setExportFilename] = useState("layout");
 
   // --- Drag state (move markers) ---
-  // pending: pointerdown happened on a marker but hasn't moved far yet
-  // active: actual drag in progress
   const dragState = useRef({
     pending: false,
     active: false,
@@ -120,7 +172,8 @@ export default function App() {
       img.src = src;
     });
 
-  const isConeType = (typeId) => typeId === "camera" || typeId === "projector" || typeId === "speaker";
+  const isConeType = (typeId) =>
+    typeId === "camera" || typeId === "projector" || typeId === "speaker";
 
   const coneColorFor = (typeId) =>
     typeId === "projector" ? "rgba(255, 204, 0, 0.35)" : "rgba(0, 200, 0, 0.35)";
@@ -241,6 +294,28 @@ export default function App() {
 
   const toggleSelectType = (typeId) => {
     setSelectedTypeId((cur) => (cur === typeId ? null : typeId));
+  };
+
+  // ---------- NEW: quick add handler (uses existing 'placed' state) ----------
+  const handleQuickAddMarker = (typeId) => {
+    const type = markerTypes.find((t) => t.id === typeId);
+    if (!type) return;
+
+    // Default to center of the image (normalized coords)
+    const x = 0.5;
+    const y = 0.5;
+
+    setPlaced((list) => [
+      ...list,
+      {
+        id: crypto.randomUUID(),
+        typeId: type.id,
+        x,
+        y,
+        iconSrc: type.iconSrc,
+        rotation: isConeType(type.id) ? 0 : null,
+      },
+    ]);
   };
 
   // -------------- Placement + dragging --------------
@@ -369,7 +444,10 @@ export default function App() {
     const dy = (e.clientY - dragState.current.startY) / rect.height;
 
     if (!dragState.current.moved) {
-      if (Math.abs(e.clientX - dragState.current.startX) > 2 || Math.abs(e.clientY - dragState.current.startY) > 2) {
+      if (
+        Math.abs(e.clientX - dragState.current.startX) > 2 ||
+        Math.abs(e.clientY - dragState.current.startY) > 2
+      ) {
         dragState.current.moved = true;
       }
     }
@@ -560,7 +638,11 @@ export default function App() {
               }}
             >
               {m.iconSrc && (
-                <img src={m.iconSrc} alt={m.label} style={{ width: 24, height: 24 }} />
+                <img
+                  src={m.iconSrc}
+                  alt={m.label}
+                  style={{ width: 24, height: 24, objectFit: "contain" }}
+                />
               )}
             </button>
           );
@@ -580,7 +662,40 @@ export default function App() {
             Deselect
           </button>
         )}
+
+        {/* ---------- NEW: Toggleable Quick Add (doesn't change your existing UX) ---------- */}
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+          <button
+            onClick={() => setShowQuickAdd((s) => !s)}
+            style={{
+              padding: "6px 10px",
+              borderRadius: 8,
+              border: "1px solid #c9d6ea",
+              background: "#fff",
+              cursor: "pointer",
+            }}
+            title="Click an icon to place it at the image center"
+          >
+            {showQuickAdd ? "Hide Quick Add" : "Show Quick Add"}
+          </button>
+        </div>
       </div>
+
+      {/* NEW: Quick Add grid (collapsible) */}
+      {showQuickAdd && (
+        <div
+          style={{
+            padding: "8px 16px",
+            background: "#f7f9fe",
+            borderBottom: "1px solid #dde5f1",
+          }}
+        >
+          <div style={{ fontSize: 13, color: "#556", marginBottom: 6 }}>
+            Quick Add (click an icon to drop it at the center)
+          </div>
+          <IconMenu markerTypes={markerTypes} onAdd={handleQuickAddMarker} />
+        </div>
+      )}
 
       {/* Main content */}
       <main style={{ padding: 16, display: "flex", justifyContent: "center" }}>
