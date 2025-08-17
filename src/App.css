@@ -36,3 +36,19 @@
     transform: rotate(360deg);
   }
 }
+
+/* Grid layout for the icon menu */
+.icon-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 50px); /* 50px wide icons */
+  gap: 10px;
+  padding: 10px;
+}
+
+/* Icons themselves */
+.icon {
+  width: 50px;
+  height: 50px;
+  object-fit: contain; /* keep aspect ratio */
+  cursor: grab;
+}
