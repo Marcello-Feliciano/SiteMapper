@@ -1,5 +1,7 @@
 import React, { useRef, useState } from "react";
 import html2canvas from "html2canvas";
+import IconMenu from "./IconMenu";
+
 
 // ---------- Cone SVG helper (45° total angle, soft fade) ----------
 function ConeSVG({ length = 140, angle = 45, color = "rgba(0,200,0,0.35)" }) {
@@ -34,6 +36,16 @@ export default function App() {
   const [imageSrc, setImageSrc] = useState(null); // dataURL of uploaded image
   const imgRef = useRef(null);
   const stageRef = useRef(null);
+
+  const [markers, setMarkers] = React.useState([]);
+
+const handleAddMarker = (icon) => {
+  setMarkers([
+    ...markers,
+    { id: Date.now(), src: icon.src, x: 100, y: 100 },
+  ]);
+};
+
 
   // NEW: wrapper & overlay so markers align 1:1 with the displayed image box
   const imageWrapRef = useRef(null);
