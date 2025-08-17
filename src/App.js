@@ -784,7 +784,7 @@ export default function App() {
           }}
         />
       )}
-    </div>   {/* ✅ THIS was missing */}
+    </div>
   );
 })}
 
