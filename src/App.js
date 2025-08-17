@@ -692,97 +692,92 @@ export default function App() {
                 }}
               >
                 {/* Markers layer */}
-{placed.map((m) => {
-  const type = markerTypes.find((t) => t.id === m.typeId);
-  const showCone = isConeType(m.typeId);
-  const rotation = typeof m.rotation === "number" ? m.rotation : 0;
-
-  return (
-    <div
-      key={m.id}
-      data-marker-id={m.id}
-      onDoubleClick={() => removeMarker(m.id)}
-      onClick={(e) => {
-        if (!showCone) return;
-        if (justDraggedRef.current) return;
-        e.stopPropagation();
-        setActiveRotateId((cur) => (cur === m.id ? null : m.id));
-      }}
-      style={{
-        position: "absolute",
-        left: `${m.x * 100}%`,
-        top: `${m.y * 100}%`,
-        transform: "translate(-50%, -50%)",
-        cursor: "grab",
-        userSelect: "none",
-        touchAction: "none",
-        background: "transparent",
-        padding: 0,
-        boxShadow: "none",
-      }}
-    >
-      {/* Cone behind icon */}
-      {showCone && (
-        <div
-          style={{
-            position: "absolute",
-            left: "50%",
-            top: "50%",
-            transform: `translate(-50%,-50%) rotate(${rotation}deg)`,
-            transformOrigin: "50% 50%",
-            pointerEvents: "none",
-          }}
-        >
-          <ConeSVG length={140} angle={45} color={coneColorFor(m.typeId)} />
-        </div>
-      )}
-
-      {/* Icon wrapper */}
+{placed.map((m) => (
+  <div
+    key={m.id}
+    data-marker-id={m.id}
+    onDoubleClick={() => removeMarker(m.id)}
+    onClick={(e) => {
+      if (!isConeType(m.typeId)) return;
+      if (justDraggedRef.current) return;
+      e.stopPropagation();
+      setActiveRotateId((cur) => (cur === m.id ? null : m.id));
+    }}
+    style={{
+      position: "absolute",
+      left: `${m.x * 100}%`,
+      top: `${m.y * 100}%`,
+      transform: "translate(-50%, -50%)",
+      cursor: "grab",
+      userSelect: "none",
+      touchAction: "none",
+      background: "transparent",
+      padding: 0,
+      boxShadow: "none",
+    }}
+  >
+    {/* Cone */}
+    {isConeType(m.typeId) && (
       <div
         style={{
-          position: "relative",
-          zIndex: 1,
-          width: 32,
-          height: 32,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
+          position: "absolute",
+          left: "50%",
+          top: "50%",
+          transform: `translate(-50%,-50%) rotate(${m.rotation || 0}deg)`,
+          transformOrigin: "50% 50%",
           pointerEvents: "none",
         }}
       >
-        {type?.iconSrc && (
-          <img
-            src={type.iconSrc}
-            alt={type?.label || "icon"}
-            style={{ maxWidth: "100%", maxHeight: "100%", display: "block" }}
-          />
-        )}
+        <ConeSVG length={140} angle={45} color={coneColorFor(m.typeId)} />
       </div>
+    )}
 
-      {/* Rotation handle */}
-      {showCone && activeRotateId === m.id && (
-        <div
-          data-rotate-handle
-          data-marker-id={m.id}
-          style={{
-            position: "absolute",
-            left: "50%",
-            top: "50%",
-            transform: `translate(-50%,-50%) rotate(${rotation}deg) translate(0, -70px)`,
-            transformOrigin: "50% 50%",
-            width: 18,
-            height: 18,
-            borderRadius: "50%",
-            border: "2px solid #1976d2",
-            background: "#fff",
-            boxShadow: "0 1px 4px rgba(0,0,0,.2)",
-            cursor: "grab",
-          }}
+    {/* Icon */}
+    <div
+      style={{
+        position: "relative",
+        zIndex: 1,
+        width: 32,
+        height: 32,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        pointerEvents: "none",
+      }}
+    >
+      {markerTypes.find((t) => t.id === m.typeId)?.iconSrc && (
+        <img
+          src={markerTypes.find((t) => t.id === m.typeId)?.iconSrc}
+          alt="icon"
+          style={{ maxWidth: "100%", maxHeight: "100%", display: "block" }}
         />
       )}
     </div>
-  );
-})} {/* <-- THIS correctly closes the map expression */}
+
+    {/* Rotation handle */}
+    {isConeType(m.typeId) && activeRotateId === m.id && (
+      <div
+        data-rotate-handle
+        data-marker-id={m.id}
+        style={{
+          position: "absolute",
+          left: "50%",
+          top: "50%",
+          transform: `translate(-50%,-50%) rotate(${m.rotation || 0}deg) translate(0, -70px)`,
+          transformOrigin: "50% 50%",
+          width: 18,
+          height: 18,
+          borderRadius: "50%",
+          border: "2px solid #1976d2",
+          background: "#fff",
+          boxShadow: "0 1px 4px rgba(0,0,0,.2)",
+          cursor: "grab",
+        }}
+      />
+    )}
+  </div>
+))}
+
 
 </div> {/* overlayRef */}
 </div> {/* imageWrapRef */}
