@@ -11,6 +11,12 @@ function ConeSVG({ length = 140, angle = 45, color = "rgba(0,200,0,0.35)" }) {
   const x2 = Math.sin(rad(half)) * length;
   const y2 = -Math.cos(rad(half)) * length;
 
+  const [zoom, setZoom] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const lastTouchDistance = useRef(null);
+  const lastTouchMidpoint = useRef({ x: 0, y: 0 });
+  const lastOffset = useRef({ x: 0, y: 0 });
+
   return (
     <svg
       width={length * 2}
@@ -30,6 +36,50 @@ function ConeSVG({ length = 140, angle = 45, color = "rgba(0,200,0,0.35)" }) {
 }
 
 export default function App() {
+
+const getDistance = (touches) => {
+    const [a, b] = touches;
+    const dx = a.clientX - b.clientX;
+    const dy = a.clientY - b.clientY;
+    return Math.sqrt(dx*dx + dy*dy);
+  };
+
+  const getMidpoint = (touches) => ({
+    x: (touches[0].clientX + touches[1].clientX)/2,
+    y: (touches[0].clientY + touches[1].clientY)/2,
+  });
+
+  const handleTouchStart = (e) => {
+    if (e.touches.length === 2) {
+      lastTouchDistance.current = getDistance(e.touches);
+      lastTouchMidpoint.current = getMidpoint(e.touches);
+      lastOffset.current = { ...offset };
+    }
+  };
+
+  const handleTouchMove = (e) => {
+    if (e.touches.length === 2 && lastTouchDistance.current) {
+      e.preventDefault();
+      const dist = getDistance(e.touches);
+      const scaleChange = dist / lastTouchDistance.current;
+      let newZoom = Math.min(Math.max(zoom * scaleChange, 0.5), 5);
+
+      const newMid = getMidpoint(e.touches);
+      const dx = newMid.x - lastTouchMidpoint.current.x;
+      const dy = newMid.y - lastTouchMidpoint.current.y;
+
+      setZoom(newZoom);
+      setOffset({
+        x: lastOffset.current.x + dx,
+        y: lastOffset.current.y + dy,
+      });
+    }
+  };
+
+  const handleTouchEnd = (e) => {
+    if (e.touches.length < 2) lastTouchDistance.current = null;
+  };
+  
   // --- Image + layout state ---
   const [imageSrc, setImageSrc] = useState(null); // dataURL of uploaded image
   const imgRef = useRef(null);
@@ -648,7 +698,12 @@ export default function App() {
               maxWidth: "min(95vw, 1200px)",
               overflow: "auto",
               touchAction: "none",
+              transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})`,
+              transformOrigin: "0 0",
             }}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
           >
             {/* Image + overlay wrapper */}
             <div
