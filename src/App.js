@@ -16,7 +16,7 @@ function ConeSVG({ length = 140, angle = 45, color = "rgba(0,200,0,0.35)" }) {
       width={length * 2}
       height={length * 2}
       viewBox={[-length, -length, length * 2, length * 2].join(" ")}
-      style={{ display: "block", pointerEvents: "none" }}
+      style={{ display: "block", pointerEvents: "auto" }}
     >
       <defs>
         <linearGradient id="coneGrad" x1="0" y1="0" x2="0" y2="1">
@@ -647,7 +647,7 @@ export default function App() {
               padding: 8, // this padding no longer throws markers off
               maxWidth: "min(95vw, 1200px)",
               overflow: "auto",
-              touchAction: "none",
+              touchAction: "auto",
             }}
           >
             {/* Image + overlay wrapper */}
@@ -670,7 +670,7 @@ export default function App() {
                   height: "auto",
                   borderRadius: 8,
                   userSelect: "none",
-                  pointerEvents: "none",
+                  pointerEvents: "auto",
                 }}
                 draggable={false}
               />
@@ -716,7 +716,7 @@ export default function App() {
                         minWidth: 32,
                         minHeight: 32,
                         objectFit: "contain",
-                        pointerEvents: "none", // image itself doesn't steal events
+                        pointerEvents: "auto", // image itself doesn't steal events
                       }}
                     />
                   ) : null;
@@ -740,7 +740,7 @@ export default function App() {
                         transform: "translate(-50%, -50%)",
                         cursor: "grab",
                         userSelect: "none",
-                        touchAction: "none",
+                        touchAction: "auto",
                         background: "transparent",
                         padding: 0,
                         boxShadow: "none",
@@ -760,7 +760,7 @@ export default function App() {
                             top: "50%",
                             transform: `translate(-50%,-50%) rotate(${rotation}deg)`,
                             transformOrigin: "50% 50%",
-                            pointerEvents: "none",
+                            pointerEvents: "auto",
                           }}
                         >
                           <ConeSVG length={140} angle={45} color={coneColorFor(m.typeId)} />
