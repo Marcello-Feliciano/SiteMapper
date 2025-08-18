@@ -929,11 +929,16 @@ export default function App() {
             boxShadow: "0 1px 4px rgba(0,0,0,.2)",
             cursor: "grab",
           }}
-        />
-      )}
-    </div>
-  );
-})}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
 
 
 
