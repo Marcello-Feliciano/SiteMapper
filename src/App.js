@@ -598,216 +598,209 @@ export default function App() {
 
       {/* Main content */}
       <main style={{ padding: 16, display: "flex", justifyContent: "center" }}>
-        {!imageSrc ? (
-          <div style={{ textAlign: "center", marginTop: 48 }}>
-            {/* Upload card */}
-            <div
-              onClick={handleImportClick}
-              style={{
-                width: 360,
-                background: "#fff",
-                borderRadius: 14,
-                boxShadow: "0 8px 24px rgba(16,24,40,.08)",
-                padding: 24,
-                cursor: "pointer",
-              }}
-            >
-              <div style={{ fontSize: 44, color: "#1976d2", marginBottom: 8 }}>☁️</div>
-              <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 4 }}>
-                Upload Floorplan
-              </div>
-              <div style={{ color: "#667085", fontSize: 14, marginBottom: 14 }}>
-                Upload a building layout or floorplan to start adding markers
-              </div>
-              <div
-                style={{
-                  border: "2px dashed #cfd8e3",
-                  borderRadius: 10,
-                  padding: 16,
-                  color: "#6b7280",
-                  fontSize: 13,
-                }}
-              >
-                Tap to select file (PNG, JPG, or JSON)
-              </div>
-            </div>
+  {!imageSrc ? (
+    <div style={{ textAlign: "center", marginTop: 48 }}>
+      {/* Upload card */}
+      <div
+        onClick={handleImportClick}
+        style={{
+          width: 360,
+          background: "#fff",
+          borderRadius: 14,
+          boxShadow: "0 8px 24px rgba(16,24,40,.08)",
+          padding: 24,
+          cursor: "pointer",
+        }}
+      >
+        <div style={{ fontSize: 44, color: "#1976d2", marginBottom: 8 }}>☁️</div>
+        <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 4 }}>Upload Floorplan</div>
+        <div style={{ color: "#667085", fontSize: 14, marginBottom: 14 }}>
+          Upload a building layout or floorplan to start adding markers
+        </div>
+        <div
+          style={{
+            border: "2px dashed #cfd8e3",
+            borderRadius: 10,
+            padding: 16,
+            color: "#6b7280",
+            fontSize: 13,
+          }}
+        >
+          Tap to select file (PNG, JPG, or JSON)
+        </div>
+      </div>
 
-            {/* Empty state */}
-            <div style={{ marginTop: 56, color: "#98a2b3" }}>
-              <div style={{ fontSize: 36 }}>🏢</div>
-              <div style={{ fontWeight: 600 }}>No projects yet</div>
-              <div style={{ fontSize: 13 }}>Upload a floorplan to get started</div>
-            </div>
-          </div>
-        ) : (
-          <div
-            ref={stageRef}
-            style={{
-              position: "relative",
-              background: "#fff",
-              border: "1px solid #e2e8f0",
-              borderRadius: 12,
-              boxShadow: "0 8px 24px rgba(16,24,40,.06)",
-              padding: 8, // this padding no longer throws markers off
-              maxWidth: "min(95vw, 1200px)",
-              overflow: "auto",
-              touchAction: "none",
-            }}
-          >
-            {/* Image + overlay wrapper */}
-            <div
-              ref={imageWrapRef}
-              style={{
-                position: "relative",
-                display: "inline-block",
-                width: "100%",
-              }}
-            >
+      {/* Empty state */}
+      <div style={{ marginTop: 56, color: "#98a2b3" }}>
+        <div style={{ fontSize: 36 }}>🏢</div>
+        <div style={{ fontWeight: 600 }}>No projects yet</div>
+        <div style={{ fontSize: 13 }}>Upload a floorplan to get started</div>
+      </div>
+    </div>
+  ) : (
+    <div
+      ref={stageRef}
+      style={{
+        position: "relative",
+        background: "#fff",
+        border: "1px solid #e2e8f0",
+        borderRadius: 12,
+        boxShadow: "0 8px 24px rgba(16,24,40,.06)",
+        padding: 8,
+        maxWidth: "min(95vw, 1200px)",
+        overflow: "auto",
+        touchAction: "none",
+      }}
+    >
+      <div
+        ref={imageWrapRef}
+        style={{
+          position: "relative",
+          display: "inline-block",
+          width: "100%",
+        }}
+      >
+        <img
+          id="floorplan-image"
+          ref={imgRef}
+          alt="Floorplan"
+          src={imageSrc}
+          style={{
+            display: "block",
+            width: "100%",
+            height: "auto",
+            borderRadius: 8,
+            userSelect: "none",
+            pointerEvents: "none",
+          }}
+          draggable={false}
+        />
+
+        <div
+          ref={overlayRef}
+          onClick={placeMarkerAtEvent}
+          onPointerDown={(e) => {
+            const handleEl = e.target.closest?.("[data-rotate-handle]");
+            if (handleEl) {
+              startRotate(handleEl.getAttribute("data-marker-id"), e);
+              return;
+            }
+            const marker = e.target.closest?.("[data-marker-id]");
+            if (marker) beginPendingDrag(marker.dataset.markerId, e);
+          }}
+          onPointerMove={onPointerMove}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
+          style={{
+            position: "absolute",
+            inset: 0,
+            borderRadius: 8,
+            pointerEvents: "auto",
+            touchAction: "none",
+          }}
+        >
+          {placed.map((m) => {
+            const type = markerTypes.find((t) => t.id === m.typeId);
+            const showCone = isConeType(m.typeId);
+            const rotation = typeof m.rotation === "number" ? m.rotation : 0;
+            const content = type?.iconSrc ? (
               <img
-                id="floorplan-image"
-                ref={imgRef}
-                alt="Floorplan"
-                src={imageSrc}
+                src={type.iconSrc}
+                alt={type?.label || "icon"}
                 style={{
-                  display: "block",
-                  width: "100%",
-                  height: "auto",
-                  borderRadius: 8,
-                  userSelect: "none",
+                  width: 32,
+                  height: 32,
+                  minWidth: 32,
+                  minHeight: 32,
+                  objectFit: "contain",
                   pointerEvents: "none",
                 }}
-                draggable={false}
               />
+            ) : null;
 
-              {/* Overlay covers exactly the rendered image area */}
+            return (
               <div
-                ref={overlayRef}
-                // Placement on click (suppressed if just dragged)
-                onClick={placeMarkerAtEvent}
-                onPointerDown={(e) => {
-                  const handleEl = e.target.closest?.("[data-rotate-handle]");
-                  if (handleEl) {
-                    startRotate(handleEl.getAttribute("data-marker-id"), e);
-                    return;
-                  }
-                  const marker = e.target.closest?.("[data-marker-id]");
-                  if (marker) beginPendingDrag(marker.dataset.markerId, e);
+                key={m.id}
+                data-marker-id={m.id}
+                onDoubleClick={() => removeMarker(m.id)}
+                onClick={(e) => {
+                  if (!showCone) return;
+                  if (justDraggedRef.current) return;
+                  e.stopPropagation();
+                  setActiveRotateId((cur) => (cur === m.id ? null : m.id));
                 }}
-                onPointerMove={onPointerMove}
-                onPointerUp={endDrag}
-                onPointerCancel={endDrag}
                 style={{
                   position: "absolute",
-                  inset: 0,
-                  borderRadius: 8,
-                  pointerEvents: "auto",
-                  touchAction: "none", // important for touch-to-drag behavior
+                  left: `${m.x * 100}%`,
+                  top: `${m.y * 100}%`,
+                  transform: "translate(-50%, -50%)",
+                  cursor: "grab",
+                  userSelect: "none",
+                  touchAction: "none",
+                  background: "transparent",
+                  padding: 0,
+                  boxShadow: "none",
                 }}
+                title={
+                  showCone
+                    ? "Click to rotate • Drag to move • Double-click to delete"
+                    : "Drag to move • Double-click to delete"
+                }
               >
-                {/* Markers layer */}
-                {placed.map((m) => {
-                  const type = markerTypes.find((t) => t.id === m.typeId);
-                  const showCone = isConeType(m.typeId);
-                  const rotation = typeof m.rotation === "number" ? m.rotation : 0;
-                
-                  const content = type?.iconSrc ? (
-                    <img
-                      src={type.iconSrc}
-                      alt={type?.label || "icon"}
-                      style={{
-                        width: 32,
-                        height: 32,
-                        minWidth: 32,
-                        minHeight: 32,
-                        objectFit: "contain",
-                        pointerEvents: "none",
-                      }}
+                {/* Cone (behind icon) */}
+                {showCone && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      left: "50%",
+                      top: "50%",
+                      transform: `translate(-50%,-50%) rotate(${rotation}deg)`,
+                      transformOrigin: "50% 50%",
+                      pointerEvents: "none",
+                    }}
+                  >
+                    <ConeSVG
+                      id={m.id}
+                      color={coneColorFor(m.typeId)}
+                      length={140}
+                      angle={45}
                     />
-                  ) : null;
-                
-                  return (
-                    <div
-                      key={m.id}
-                      data-marker-id={m.id}
-                      onDoubleClick={() => removeMarker(m.id)}
-                      onClick={(e) => {
-                        if (!showCone) return;
-                        if (justDraggedRef.current) return;
-                        e.stopPropagation();
-                        setActiveRotateId((cur) => (cur === m.id ? null : m.id));
-                      }}
-                      style={{
-                        position: "absolute",
-                        left: `${m.x * 100}%`,
-                        top: `${m.y * 100}%`,
-                        transform: "translate(-50%, -50%)",
-                        cursor: "grab",
-                        userSelect: "none",
-                        touchAction: "none",
-                        background: "transparent",
-                        padding: 0,
-                        boxShadow: "none",
-                      }}
-                      title={
-                        showCone
-                          ? "Click to rotate • Drag to move • Double-click to delete"
-                          : "Drag to move • Double-click to delete"
-                      }
-                    >
-                      {/* Cone (behind icon) */}
-                      {showCone && (
-                        <div
-                          style={{
-                            position: "absolute",
-                            left: "50%",
-                            top: "50%",
-                            transform: `translate(-50%,-50%) rotate(${rotation}deg)`,
-                            transformOrigin: "50% 50%",
-                            pointerEvents: "none",
-                          }}
-                        >
-                          <ConeSVG
-                            id={m.id} // unique gradient ID
-                            color={coneColorFor(m.typeId)}
-                            length={140}
-                            angle={45}
-                          />
-                        </div>
-                      )}
-                
-                      {/* Icon (above) */}
-                      <div style={{ position: "relative", zIndex: 1 }}>{content}</div>
-                
-                      {/* Rotation handle (visible when active) */}
-                      {showCone && activeRotateId === m.id && (
-                        <div
-                          data-rotate-handle
-                          data-marker-id={m.id}
-                          style={{
-                            position: "absolute",
-                            left: "50%",
-                            top: "50%",
-                            transform: `translate(-50%,-50%) rotate(${rotation}deg) translate(0, -70px)`,
-                            transformOrigin: "50% 50%",
-                            width: 18,
-                            height: 18,
-                            borderRadius: "50%",
-                            border: "2px solid #1976d2",
-                            background: "#fff",
-                            boxShadow: "0 1px 4px rgba(0,0,0,.2)",
-                            cursor: "grab",
-                          }}
-                        />
-                      )}
-                    </div>
-                  );
-                })}
-              </div> {/* overlayRef */}
-            </div> {/* imageWrapRef */}
-          </div> {/* stageRef */}
-        )} {/* End conditional for imageSrc */}
+                  </div>
+                )}
 
-      </main>
+                {/* Icon (above) */}
+                <div style={{ position: "relative", zIndex: 1 }}>{content}</div>
+
+                {/* Rotation handle */}
+                {showCone && activeRotateId === m.id && (
+                  <div
+                    data-rotate-handle
+                    data-marker-id={m.id}
+                    style={{
+                      position: "absolute",
+                      left: "50%",
+                      top: "50%",
+                      transform: `translate(-50%,-50%) rotate(${rotation}deg) translate(0, -70px)`,
+                      transformOrigin: "50% 50%",
+                      width: 18,
+                      height: 18,
+                      borderRadius: "50%",
+                      border: "2px solid #1976d2",
+                      background: "#fff",
+                      boxShadow: "0 1px 4px rgba(0,0,0,.2)",
+                      cursor: "grab",
+                    }}
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div> {/* overlayRef */}
+      </div> {/* imageWrapRef */}
+    </div> {/* stageRef */}
+  )}
+</main>
+
 
       {/* Export filename modal */}
       {showExportModal && (
