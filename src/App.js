@@ -472,414 +472,415 @@ export default function App() {
 
   // -------------- UI --------------
 
-  return (
-    <div
+return (
+  <div
+    style={{
+      fontFamily: "Inter, system-ui, Arial, sans-serif",
+      background: "#f5f7fb",
+      minHeight: "100vh",
+    }}
+  >
+    {/* Header */}
+    <header
       style={{
-        fontFamily: "Inter, system-ui, Arial, sans-serif",
-        background: "#f5f7fb",
-        minHeight: "100vh",
+        height: 56,
+        background: "#1976d2",
+        color: "#fff",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "0 16px",
+        boxShadow: "0 2px 8px rgba(0,0,0,.12)",
+        position: "sticky",
+        top: 0,
+        zIndex: 10,
       }}
     >
-      {/* Header */}
-      <header
-        style={{
-          height: 56,
-          background: "#1976d2",
-          color: "#fff",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "0 16px",
-          boxShadow: "0 2px 8px rgba(0,0,0,.12)",
-          position: "sticky",
-          top: 0,
-          zIndex: 10,
-        }}
-      >
-        <div style={{ fontWeight: 700 }}>JobSite Marker</div>
+      <div style={{ fontWeight: 700 }}>JobSite Marker</div>
 
-        <div style={{ display: "flex", gap: 8 }}>
-          <button
-            onClick={() => setShowExportModal(true)}
-            disabled={!imageSrc}
-            title="Export JSON + PNG"
-            style={{
-              background: "transparent",
-              color: "#fff",
-              border: "1px solid rgba(255,255,255,.7)",
-              borderRadius: 8,
-              padding: "6px 12px",
-              cursor: imageSrc ? "pointer" : "not-allowed",
-            }}
-          >
-            Export
-          </button>
-          <button
-            onClick={handleImportClick}
-            title="Import image or JSON"
-            style={{
-              background: "#fff",
-              color: "#1976d2",
-              border: "none",
-              borderRadius: 8,
-              padding: "6px 12px",
-              cursor: "pointer",
-              fontWeight: 600,
-            }}
-          >
-            Import
-          </button>
-          <input
-            ref={importInputRef}
-            type="file"
-            accept="image/png,image/jpeg,application/json"
-            onChange={handleImportChange}
-            style={{ display: "none" }}
-          />
-        </div>
-      </header>
-
-      {/* Marker palette */}
-      <div
-        style={{
-          display: "flex",
-          gap: 10,
-          alignItems: "center",
-          flexWrap: "wrap",
-          padding: "12px 16px",
-          background: "#eef3fb",
-          borderBottom: "1px solid #dde5f1",
-        }}
-      >
-        <div style={{ fontWeight: 600, color: "#365" }}>Markers:</div>
-        {markerTypes.map((m) => {
-          const selected = selectedTypeId === m.id;
-          return (
-            <button
-              key={m.id}
-              onClick={() => toggleSelectType(m.id)}
-              title={m.label}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                width: 40,
-                height: 40,
-                borderRadius: 10,
-                border: selected ? "2px solid #1976d2" : "1px solid #c9d6ea",
-                background: selected ? "rgba(25,118,210,0.08)" : "#fff",
-                cursor: "pointer",
-                fontSize: 22,
-                userSelect: "none",
-              }}
-            >
-              {m.iconSrc && (
-                <img src={m.iconSrc} alt={m.label} style={{ width: 24, height: 24 }} />
-              )}
-            </button>
-          );
-        })}
-        {selectedTypeId && (
-          <button
-            onClick={() => setSelectedTypeId(null)}
-            style={{
-              marginLeft: 6,
-              padding: "6px 10px",
-              borderRadius: 8,
-              border: "1px solid #c9d6ea",
-              background: "#fff",
-              cursor: "pointer",
-            }}
-          >
-            Deselect
-          </button>
-        )}
-      </div>
-
-      {/* Main content */}
-      <main style={{ padding: 16, display: "flex", justifyContent: "center" }}>
-  {!imageSrc ? (
-    <div style={{ textAlign: "center", marginTop: 48 }}>
-      {/* Upload card */}
-      <div
-        onClick={handleImportClick}
-        style={{
-          width: 360,
-          background: "#fff",
-          borderRadius: 14,
-          boxShadow: "0 8px 24px rgba(16,24,40,.08)",
-          padding: 24,
-          cursor: "pointer",
-        }}
-      >
-        <div style={{ fontSize: 44, color: "#1976d2", marginBottom: 8 }}>☁️</div>
-        <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 4 }}>Upload Floorplan</div>
-        <div style={{ color: "#667085", fontSize: 14, marginBottom: 14 }}>
-          Upload a building layout or floorplan to start adding markers
-        </div>
-        <div
+      <div style={{ display: "flex", gap: 8 }}>
+        <button
+          onClick={() => setShowExportModal(true)}
+          disabled={!imageSrc}
+          title="Export JSON + PNG"
           style={{
-            border: "2px dashed #cfd8e3",
-            borderRadius: 10,
-            padding: 16,
-            color: "#6b7280",
-            fontSize: 13,
+            background: "transparent",
+            color: "#fff",
+            border: "1px solid rgba(255,255,255,.7)",
+            borderRadius: 8,
+            padding: "6px 12px",
+            cursor: imageSrc ? "pointer" : "not-allowed",
           }}
         >
-          Tap to select file (PNG, JPG, or JSON)
-        </div>
-      </div>
-
-      {/* Empty state */}
-      <div style={{ marginTop: 56, color: "#98a2b3" }}>
-        <div style={{ fontSize: 36 }}>🏢</div>
-        <div style={{ fontWeight: 600 }}>No projects yet</div>
-        <div style={{ fontSize: 13 }}>Upload a floorplan to get started</div>
-      </div>
-    </div>
-  ) : (
-    <div
-      ref={stageRef}
-      style={{
-        position: "relative",
-        background: "#fff",
-        border: "1px solid #e2e8f0",
-        borderRadius: 12,
-        boxShadow: "0 8px 24px rgba(16,24,40,.06)",
-        padding: 8,
-        maxWidth: "min(95vw, 1200px)",
-        overflow: "auto",
-        touchAction: "none",
-      }}
-    >
-      <div
-        ref={imageWrapRef}
-        style={{
-          position: "relative",
-          display: "inline-block",
-          width: "100%",
-        }}
-      >
-        <img
-          id="floorplan-image"
-          ref={imgRef}
-          alt="Floorplan"
-          src={imageSrc}
+          Export
+        </button>
+        <button
+          onClick={handleImportClick}
+          title="Import image or JSON"
           style={{
-            display: "block",
-            width: "100%",
-            height: "auto",
+            background: "#fff",
+            color: "#1976d2",
+            border: "none",
             borderRadius: 8,
-            userSelect: "none",
-            pointerEvents: "none",
+            padding: "6px 12px",
+            cursor: "pointer",
+            fontWeight: 600,
           }}
-          draggable={false}
+        >
+          Import
+        </button>
+        <input
+          ref={importInputRef}
+          type="file"
+          accept="image/png,image/jpeg,application/json"
+          onChange={handleImportChange}
+          style={{ display: "none" }}
         />
+      </div>
+    </header>
 
-        <div
-          ref={overlayRef}
-          onClick={placeMarkerAtEvent}
-          onPointerDown={(e) => {
-            const handleEl = e.target.closest?.("[data-rotate-handle]");
-            if (handleEl) {
-              startRotate(handleEl.getAttribute("data-marker-id"), e);
-              return;
-            }
-            const marker = e.target.closest?.("[data-marker-id]");
-            if (marker) beginPendingDrag(marker.dataset.markerId, e);
-          }}
-          onPointerMove={onPointerMove}
-          onPointerUp={endDrag}
-          onPointerCancel={endDrag}
+    {/* Marker palette */}
+    <div
+      style={{
+        display: "flex",
+        gap: 10,
+        alignItems: "center",
+        flexWrap: "wrap",
+        padding: "12px 16px",
+        background: "#eef3fb",
+        borderBottom: "1px solid #dde5f1",
+      }}
+    >
+      <div style={{ fontWeight: 600, color: "#365" }}>Markers:</div>
+      {markerTypes.map((m) => {
+        const selected = selectedTypeId === m.id;
+        return (
+          <button
+            key={m.id}
+            onClick={() => toggleSelectType(m.id)}
+            title={m.label}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 40,
+              height: 40,
+              borderRadius: 10,
+              border: selected ? "2px solid #1976d2" : "1px solid #c9d6ea",
+              background: selected ? "rgba(25,118,210,0.08)" : "#fff",
+              cursor: "pointer",
+              fontSize: 22,
+              userSelect: "none",
+            }}
+          >
+            {m.iconSrc && (
+              <img src={m.iconSrc} alt={m.label} style={{ width: 24, height: 24 }} />
+            )}
+          </button>
+        );
+      })}
+      {selectedTypeId && (
+        <button
+          onClick={() => setSelectedTypeId(null)}
           style={{
-            position: "absolute",
-            inset: 0,
+            marginLeft: 6,
+            padding: "6px 10px",
             borderRadius: 8,
-            pointerEvents: "auto",
-            touchAction: "none",
+            border: "1px solid #c9d6ea",
+            background: "#fff",
+            cursor: "pointer",
           }}
         >
-          {placed.map((m) => {
-            const type = markerTypes.find((t) => t.id === m.typeId);
-            const showCone = isConeType(m.typeId);
-            const rotation = typeof m.rotation === "number" ? m.rotation : 0;
-            const content = type?.iconSrc ? (
-              <img
-                src={type.iconSrc}
-                alt={type?.label || "icon"}
-                style={{
-                  width: 32,
-                  height: 32,
-                  minWidth: 32,
-                  minHeight: 32,
-                  objectFit: "contain",
-                  pointerEvents: "none",
-                }}
-              />
-            ) : null;
+          Deselect
+        </button>
+      )}
+    </div>
 
-            return (
-              <div
-                key={m.id}
-                data-marker-id={m.id}
-                onDoubleClick={() => removeMarker(m.id)}
-                onClick={(e) => {
-                  if (!showCone) return;
-                  if (justDraggedRef.current) return;
-                  e.stopPropagation();
-                  setActiveRotateId((cur) => (cur === m.id ? null : m.id));
-                }}
-                style={{
-                  position: "absolute",
-                  left: `${m.x * 100}%`,
-                  top: `${m.y * 100}%`,
-                  transform: "translate(-50%, -50%)",
-                  cursor: "grab",
-                  userSelect: "none",
-                  touchAction: "none",
-                  background: "transparent",
-                  padding: 0,
-                  boxShadow: "none",
-                }}
-                title={
-                  showCone
-                    ? "Click to rotate • Drag to move • Double-click to delete"
-                    : "Drag to move • Double-click to delete"
-                }
-              >
-                {/* Cone (behind icon) */}
-                {showCone && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      left: "50%",
-                      top: "50%",
-                      transform: `translate(-50%,-50%) rotate(${rotation}deg)`,
-                      transformOrigin: "50% 50%",
-                      pointerEvents: "none",
-                    }}
-                  >
-                    <ConeSVG
-                      id={m.id}
-                      color={coneColorFor(m.typeId)}
-                      length={140}
-                      angle={45}
-                    />
-                  </div>
-                )}
-
-                {/* Icon (above) */}
-                <div style={{ position: "relative", zIndex: 1 }}>{content}</div>
-
-                {/* Rotation handle */}
-                {showCone && activeRotateId === m.id && (
-                  <div
-                    data-rotate-handle
-                    data-marker-id={m.id}
-                    style={{
-                      position: "absolute",
-                      left: "50%",
-                      top: "50%",
-                      transform: `translate(-50%,-50%) rotate(${rotation}deg) translate(0, -70px)`,
-                      transformOrigin: "50% 50%",
-                      width: 18,
-                      height: 18,
-                      borderRadius: "50%",
-                      border: "2px solid #1976d2",
-                      background: "#fff",
-                      boxShadow: "0 1px 4px rgba(0,0,0,.2)",
-                      cursor: "grab",
-                    }}
-                  />
-                )}
-              </div>
-            );
-          })}
-        </div> {/* overlayRef */}
-      </div> {/* imageWrapRef */}
-    </div> {/* stageRef */}
-  )}
-</main>
-
-
-      {/* Export filename modal */}
-      {showExportModal && (
-        <div
-          onClick={() => setShowExportModal(false)}
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(2,6,23,.5)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 50,
-          }}
-        >
+    {/* Main content */}
+    <main style={{ padding: 16, display: "flex", justifyContent: "center" }}>
+      {!imageSrc ? (
+        <div style={{ textAlign: "center", marginTop: 48 }}>
+          {/* Upload card */}
           <div
-            onClick={(e) => e.stopPropagation()}
+            onClick={handleImportClick}
             style={{
               width: 360,
               background: "#fff",
               borderRadius: 14,
-              boxShadow: "0 16px 48px rgba(16,24,40,.2)",
-              padding: 18,
-              display: "flex",
-              flexDirection: "column",
-              gap: 12,
+              boxShadow: "0 8px 24px rgba(16,24,40,.08)",
+              padding: 24,
+              cursor: "pointer",
             }}
           >
-            <div style={{ fontWeight: 700, fontSize: 16 }}>Export filename</div>
-            <input
-              value={exportFilename}
-              onChange={(e) => setExportFilename(e.target.value)}
-              placeholder="layout"
-              autoFocus
-              style={{
-                padding: "10px 12px",
-                borderRadius: 10,
-                border: "1px solid #e2e8f0",
-                outline: "none",
-                fontSize: 14,
-              }}
-            />
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-              <button
-                onClick={() => setShowExportModal(false)}
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: 10,
-                  background: "#f3f4f6",
-                  border: "1px solid #e5e7eb",
-                  cursor: "pointer",
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  exportJSONandPNG(exportFilename);
-                  setShowExportModal(false);
-                }}
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: 10,
-                  background: "#1976d2",
-                  color: "#fff",
-                  border: "none",
-                  cursor: "pointer",
-                  fontWeight: 600,
-                }}
-              >
-                Export
-              </button>
+            <div style={{ fontSize: 44, color: "#1976d2", marginBottom: 8 }}>☁️</div>
+            <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 4 }}>
+              Upload Floorplan
             </div>
-            <div style={{ color: "#6b7280", fontSize: 12 }}>
-              Exports <b>.json</b> (image + markers) and <b>.png</b> (full layout).
+            <div style={{ color: "#667085", fontSize: 14, marginBottom: 14 }}>
+              Upload a building layout or floorplan to start adding markers
+            </div>
+            <div
+              style={{
+                border: "2px dashed #cfd8e3",
+                borderRadius: 10,
+                padding: 16,
+                color: "#6b7280",
+                fontSize: 13,
+              }}
+            >
+              Tap to select file (PNG, JPG, or JSON)
+            </div>
+          </div>
+
+          {/* Empty state */}
+          <div style={{ marginTop: 56, color: "#98a2b3" }}>
+            <div style={{ fontSize: 36 }}>🏢</div>
+            <div style={{ fontWeight: 600 }}>No projects yet</div>
+            <div style={{ fontSize: 13 }}>Upload a floorplan to get started</div>
+          </div>
+        </div>
+      ) : (
+        <div
+          ref={stageRef}
+          style={{
+            position: "relative",
+            background: "#fff",
+            border: "1px solid #e2e8f0",
+            borderRadius: 12,
+            boxShadow: "0 8px 24px rgba(16,24,40,.06)",
+            padding: 8,
+            maxWidth: "min(95vw, 1200px)",
+            overflow: "auto",
+            touchAction: "none",
+          }}
+        >
+          <div
+            ref={imageWrapRef}
+            style={{
+              position: "relative",
+              display: "inline-block",
+              width: "100%",
+            }}
+          >
+            <img
+              id="floorplan-image"
+              ref={imgRef}
+              alt="Floorplan"
+              src={imageSrc}
+              style={{
+                display: "block",
+                width: "100%",
+                height: "auto",
+                borderRadius: 8,
+                userSelect: "none",
+                pointerEvents: "none",
+              }}
+              draggable={false}
+            />
+
+            <div
+              ref={overlayRef}
+              onClick={placeMarkerAtEvent}
+              onPointerDown={(e) => {
+                const handleEl = e.target.closest?.("[data-rotate-handle]");
+                if (handleEl) {
+                  startRotate(handleEl.getAttribute("data-marker-id"), e);
+                  return;
+                }
+                const marker = e.target.closest?.("[data-marker-id]");
+                if (marker) beginPendingDrag(marker.dataset.markerId, e);
+              }}
+              onPointerMove={onPointerMove}
+              onPointerUp={endDrag}
+              onPointerCancel={endDrag}
+              style={{
+                position: "absolute",
+                inset: 0,
+                borderRadius: 8,
+                pointerEvents: "auto",
+                touchAction: "none",
+              }}
+            >
+              {placed.map((m) => {
+                const type = markerTypes.find((t) => t.id === m.typeId);
+                const showCone = isConeType(m.typeId);
+                const rotation = typeof m.rotation === "number" ? m.rotation : 0;
+                const content = type?.iconSrc ? (
+                  <img
+                    src={type.iconSrc}
+                    alt={type?.label || "icon"}
+                    style={{
+                      width: 32,
+                      height: 32,
+                      minWidth: 32,
+                      minHeight: 32,
+                      objectFit: "contain",
+                      pointerEvents: "none",
+                    }}
+                  />
+                ) : null;
+
+                return (
+                  <div
+                    key={m.id}
+                    data-marker-id={m.id}
+                    onDoubleClick={() => removeMarker(m.id)}
+                    onClick={(e) => {
+                      if (!showCone) return;
+                      if (justDraggedRef.current) return;
+                      e.stopPropagation();
+                      setActiveRotateId((cur) => (cur === m.id ? null : m.id));
+                    }}
+                    style={{
+                      position: "absolute",
+                      left: `${m.x * 100}%`,
+                      top: `${m.y * 100}%`,
+                      transform: "translate(-50%, -50%)",
+                      cursor: "grab",
+                      userSelect: "none",
+                      touchAction: "none",
+                      background: "transparent",
+                      padding: 0,
+                      boxShadow: "none",
+                    }}
+                    title={
+                      showCone
+                        ? "Click to rotate • Drag to move • Double-click to delete"
+                        : "Drag to move • Double-click to delete"
+                    }
+                  >
+                    {/* Cone (behind icon) */}
+                    {showCone && (
+                      <div
+                        style={{
+                          position: "absolute",
+                          left: "50%",
+                          top: "50%",
+                          transform: `translate(-50%,-50%) rotate(${rotation}deg)`,
+                          transformOrigin: "50% 50%",
+                          pointerEvents: "none",
+                        }}
+                      >
+                        <ConeSVG
+                          id={m.id}
+                          color={coneColorFor(m.typeId)}
+                          length={140}
+                          angle={45}
+                        />
+                      </div>
+                    )}
+
+                    {/* Icon (above) */}
+                    <div style={{ position: "relative", zIndex: 1 }}>{content}</div>
+
+                    {/* Rotation handle */}
+                    {showCone && activeRotateId === m.id && (
+                      <div
+                        data-rotate-handle
+                        data-marker-id={m.id}
+                        style={{
+                          position: "absolute",
+                          left: "50%",
+                          top: "50%",
+                          transform: `translate(-50%,-50%) rotate(${rotation}deg) translate(0, -70px)`,
+                          transformOrigin: "50% 50%",
+                          width: 18,
+                          height: 18,
+                          borderRadius: "50%",
+                          border: "2px solid #1976d2",
+                          background: "#fff",
+                          boxShadow: "0 1px 4px rgba(0,0,0,.2)",
+                          cursor: "grab",
+                        }}
+                      />
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
       )}
-    </div>
-  );
-}
+    </main>
+
+    {/* Export filename modal */}
+    {showExportModal && (
+      <div
+        onClick={() => setShowExportModal(false)}
+        style={{
+          position: "fixed",
+          inset: 0,
+          background: "rgba(2,6,23,.5)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 50,
+        }}
+      >
+        <div
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            width: 360,
+            background: "#fff",
+            borderRadius: 14,
+            boxShadow: "0 16px 48px rgba(16,24,40,.2)",
+            padding: 18,
+            display: "flex",
+            flexDirection: "column",
+            gap: 12,
+          }}
+        >
+          <div style={{ fontWeight: 700, fontSize: 16 }}>Export filename</div>
+          <input
+            value={exportFilename}
+            onChange={(e) => setExportFilename(e.target.value)}
+            placeholder="layout"
+            autoFocus
+            style={{
+              padding: "10px 12px",
+              borderRadius: 10,
+              border: "1px solid #e2e8f0",
+              outline: "none",
+              fontSize: 14,
+            }}
+          />
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+            <button
+              onClick={() => setShowExportModal(false)}
+              style={{
+                padding: "8px 12px",
+                borderRadius: 10,
+                background: "#f3f4f6",
+                border: "1px solid #e5e7eb",
+                cursor: "pointer",
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => {
+                exportJSONandPNG(exportFilename);
+                setShowExportModal(false);
+              }}
+              style={{
+                padding: "8px 12px",
+                borderRadius: 10,
+                background: "#1976d2",
+                color: "#fff",
+                border: "none",
+                cursor: "pointer",
+                fontWeight: 600,
+              }}
+            >
+              Export
+            </button>
+          </div>
+          <div style={{ color: "#6b7280", fontSize: 12 }}>
+            Exports <b>.json</b> (image + markers) and <b>.png</b> (full layout).
+          </div>
+        </div>
+      </div>
+    )}
+  </div>
+);
+
