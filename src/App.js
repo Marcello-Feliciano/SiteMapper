@@ -697,7 +697,7 @@ export default function App() {
                   inset: 0,
                   borderRadius: 8,
                   pointerEvents: "auto",
-                  touchAction: "none", // important for touch-to-drag behavior
+                  touchAction: "pan-x pan-y pinch-zoom", // important for touch-to-drag behavior
                 }}
               >
                 {/* Markers layer */}
