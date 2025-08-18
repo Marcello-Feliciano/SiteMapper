@@ -57,25 +57,36 @@ const getDistance = (touches) => {
   };
 
   const handleTouchMove = (e) => {
-    if (e.touches.length === 2 && lastTouchDistance.current) {
-      e.preventDefault();
-      const dist = getDistance(e.touches);
-      const scaleChange = dist / lastTouchDistance.current;
-      const zoomFactor = 0.1; // smaller = slower zoom
-      let newZoom = zoom + (zoom * (scaleChange - 1)) * zoomFactor;
-      newZoom = Math.min(Math.max(newZoom, 0.5), 5);
+  if (e.touches.length === 2) {
+    e.preventDefault();
 
-      const newMid = getMidpoint(e.touches);
-      const dx = newMid.x - lastTouchMidpoint.current.x;
-      const dy = newMid.y - lastTouchMidpoint.current.y;
+    const dist = getDistance(e.touches);
+    const newMid = getMidpoint(e.touches);
 
-      setZoom(newZoom);
-      setOffset({
-        x: lastOffset.current.x + dx,
-        y: lastOffset.current.y + dy,
-      });
-    }
-  };
+    // Compute pinch scale
+    const scaleChange = dist / lastTouchDistance.current;
+
+    // Apply controlled factor for smooth global zoom
+    const zoomFactor = 0.02; // smaller = slower zoom
+    const deltaZoom = (scaleChange - 1) / zoomFactor;
+    const newZoom = Math.min(Math.max(zoom + deltaZoom, 0.5), 5);
+
+    // Optional: adjust offset to keep zoom centered around midpoint
+    const rect = stageRef.current.getBoundingClientRect();
+    const offsetX = (newMid.x - rect.left - offset.x) * (newZoom / zoom - 1);
+    const offsetY = (newMid.y - rect.top - offset.y) * (newZoom / zoom - 1);
+
+    setZoom(newZoom);
+    setOffset({
+      x: offset.x - offsetX,
+      y: offset.y - offsetY,
+    });
+
+    lastTouchDistance.current = dist;
+    lastTouchMidpoint.current = newMid;
+  }
+};
+
 
   const handleTouchEnd = (e) => {
     if (e.touches.length < 2) lastTouchDistance.current = null;
