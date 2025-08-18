@@ -61,7 +61,9 @@ const getDistance = (touches) => {
       e.preventDefault();
       const dist = getDistance(e.touches);
       const scaleChange = dist / lastTouchDistance.current;
-      let newZoom = Math.min(Math.max(zoom * scaleChange, 0.5), 5);
+      const zoomFactor = 0.1; // smaller = slower zoom
+      let newZoom = zoom + (zoom * (scaleChange - 1)) * zoomFactor;
+      newZoom = Math.min(Math.max(newZoom, 0.5), 5);
 
       const newMid = getMidpoint(e.touches);
       const dx = newMid.x - lastTouchMidpoint.current.x;
