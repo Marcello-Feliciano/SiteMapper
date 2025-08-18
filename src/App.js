@@ -702,104 +702,153 @@ export default function App() {
               >
                 {/* Markers layer */}
                 {placed.map((m) => {
-                  const type = markerTypes.find((t) => t.id === m.typeId);
-                  const showCone = isConeType(m.typeId);
-                  const rotation = typeof m.rotation === "number" ? m.rotation : 0;
+  const type = markerTypes.find((t) => t.id === m.typeId);
+  const showCone = isConeType(m.typeId);
+  const rotation = typeof m.rotation === "number" ? m.rotation : 0;
 
-                  const content = type?.iconSrc ? (
-                    <img
-                      src={type.iconSrc}
-                      alt={type?.label || "icon"}
-                      style={{
-                        width: 32,
-                        height: 32,
-                        minWidth: 32,
-                        minHeight: 32,
-                        objectFit: "contain",
-                        pointerEvents: "none", // image itself doesn't steal events
-                      }}
-                    />
-                  ) : null;
+  const content = type?.iconSrc ? (
+    <img
+      src={type.iconSrc}
+      alt={type?.label || "icon"}
+      style={{
+        width: 32,
+        height: 32,
+        minWidth: 32,
+        minHeight: 32,
+        objectFit: "contain",
+        pointerEvents: "none", // image itself doesn't steal events
+      }}
+      draggable={false}
+    />
+  ) : null;
 
-                  return (
-                    <div
-                      key={m.id}
-                      data-marker-id={m.id}
-                      onDoubleClick={() => removeMarker(m.id)}
-                      onClick={(e) => {
-                        // Toggle rotate handle only for cone-capable types
-                        if (!showCone) return;
-                        if (justDraggedRef.current) return;
-                        e.stopPropagation();
-                        setActiveRotateId((cur) => (cur === m.id ? null : m.id));
-                      }}
-                      style={{
-                        position: "absolute",
-                        left: `${m.x * 100}%`,
-                        top: `${m.y * 100}%`,
-                        transform: "translate(-50%, -50%)",
-                        cursor: "grab",
-                        userSelect: "none",
-                        touchAction: "none",
-                        background: "transparent",
-                        padding: 0,
-                        boxShadow: "none",
-                      }}
-                      title={
-                        showCone
-                          ? "Click to rotate • Drag to move • Double-click to delete"
-                          : "Drag to move • Double-click to delete"
-                      }
-                    >
-                      {/* Cone (behind icon) */}
-                      {showCone && (
-                        <div
-                          style={{
-                            position: "absolute",
-                            left: "50%",
-                            top: "50%",
-                            transform: `translate(-50%,-50%) rotate(${rotation}deg)`,
-                            transformOrigin: "50% 50%",
-                            pointerEvents: "none",
-                          }}
-                        >
-                          <ConeSVG length={140} angle={45} color={coneColorFor(m.typeId)} />
-                        </div>
-                      )}
+  return (
+    <div
+      key={m.id}
+      data-marker-id={m.id}
+      onDoubleClick={() => removeMarker(m.id)}
+      onClick={(e) => {
+        if (!showCone) return;
+        if (justDraggedRef.current) return;
+        e.stopPropagation();
+        setActiveRotateId((cur) => (cur === m.id ? null : m.id));
+      }}
+      onMouseDown={(e) => {
+        setDraggingId(m.id);
+        setDragOffset({ x: e.clientX, y: e.clientY, markerX: m.x, markerY: m.y });
+      }}
+      onMouseMove={(e) => {
+        if (draggingId === m.id) {
+          const dx = e.clientX - dragOffset.x;
+          const dy = e.clientY - dragOffset.y;
+          setPlaced((ps) =>
+            ps.map((pm) =>
+              pm.id === m.id
+                ? {
+                    ...pm,
+                    x: dragOffset.markerX + dx / stageRef.current.offsetWidth,
+                    y: dragOffset.markerY + dy / stageRef.current.offsetHeight,
+                  }
+                : pm
+            )
+          );
+        }
+      }}
+      onMouseUp={() => setDraggingId(null)}
+      onTouchStart={(e) => {
+        if (e.touches.length === 1) {
+          e.preventDefault();
+          const touch = e.touches[0];
+          setDraggingId(m.id);
+          setDragOffset({ x: touch.clientX, y: touch.clientY, markerX: m.x, markerY: m.y });
+        } else {
+          setDraggingId(null); // allow pinch zoom
+        }
+      }}
+      onTouchMove={(e) => {
+        if (draggingId === m.id && e.touches.length === 1) {
+          e.preventDefault();
+          const touch = e.touches[0];
+          const dx = touch.clientX - dragOffset.x;
+          const dy = touch.clientY - dragOffset.y;
+          setPlaced((ps) =>
+            ps.map((pm) =>
+              pm.id === m.id
+                ? {
+                    ...pm,
+                    x: dragOffset.markerX + dx / stageRef.current.offsetWidth,
+                    y: dragOffset.markerY + dy / stageRef.current.offsetHeight,
+                  }
+                : pm
+            )
+          );
+        }
+      }}
+      onTouchEnd={(e) => {
+        if (e.touches.length === 0) setDraggingId(null);
+      }}
+      style={{
+        position: "absolute",
+        left: `${m.x * 100}%`,
+        top: `${m.y * 100}%`,
+        transform: "translate(-50%, -50%)",
+        cursor: "grab",
+        userSelect: "none",
+        touchAction: "none",
+        background: "transparent",
+        padding: 0,
+        boxShadow: "none",
+      }}
+      title={
+        showCone
+          ? "Click to rotate • Drag to move • Double-click to delete"
+          : "Drag to move • Double-click to delete"
+      }
+    >
+      {/* Cone (behind icon) */}
+      {showCone && (
+        <div
+          style={{
+            position: "absolute",
+            left: "50%",
+            top: "50%",
+            transform: `translate(-50%,-50%) rotate(${rotation}deg)`,
+            transformOrigin: "50% 50%",
+            pointerEvents: "none",
+          }}
+        >
+          <ConeSVG length={140} angle={45} color={coneColorFor(m.typeId)} />
+        </div>
+      )}
 
-                      {/* Icon (above) */}
-                      <div style={{ position: "relative", zIndex: 1 }}>{content}</div>
+      {/* Icon (above) */}
+      <div style={{ position: "relative", zIndex: 1 }}>{content}</div>
 
-                      {/* Rotation handle (visible when active) */}
-                      {showCone && activeRotateId === m.id && (
-                        <div
-                          data-rotate-handle
-                          data-marker-id={m.id}
-                          // place the handle 70px away in the current cone direction
-                          style={{
-                            position: "absolute",
-                            left: "50%",
-                            top: "50%",
-                            transform: `translate(-50%,-50%) rotate(${rotation}deg) translate(0, -70px)`,
-                            transformOrigin: "50% 50%",
-                            width: 18,
-                            height: 18,
-                            borderRadius: "50%",
-                            border: "2px solid #1976d2",
-                            background: "#fff",
-                            boxShadow: "0 1px 4px rgba(0,0,0,.2)",
-                            cursor: "grab",
-                          }}
-                        />
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        )}
-      </main>
+      {/* Rotation handle (visible when active) */}
+      {showCone && activeRotateId === m.id && (
+        <div
+          data-rotate-handle
+          data-marker-id={m.id}
+          style={{
+            position: "absolute",
+            left: "50%",
+            top: "50%",
+            transform: `translate(-50%,-50%) rotate(${rotation}deg) translate(0, -70px)`,
+            transformOrigin: "50% 50%",
+            width: 18,
+            height: 18,
+            borderRadius: "50%",
+            border: "2px solid #1976d2",
+            background: "#fff",
+            boxShadow: "0 1px 4px rgba(0,0,0,.2)",
+            cursor: "grab",
+          }}
+        />
+      )}
+    </div>
+  );
+})}
+
 
       {/* Export filename modal */}
       {showExportModal && (
