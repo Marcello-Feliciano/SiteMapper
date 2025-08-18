@@ -11,12 +11,6 @@ function ConeSVG({ length = 140, angle = 45, color = "rgba(0,200,0,0.35)" }) {
   const x2 = Math.sin(rad(half)) * length;
   const y2 = -Math.cos(rad(half)) * length;
 
-  const [zoom, setZoom] = useState(1);
-  const [offset, setOffset] = useState({ x: 0, y: 0 });
-  const lastTouchDistance = useRef(null);
-  const lastTouchMidpoint = useRef({ x: 0, y: 0 });
-  const lastOffset = useRef({ x: 0, y: 0 });
-
   return (
     <svg
       width={length * 2}
@@ -36,6 +30,11 @@ function ConeSVG({ length = 140, angle = 45, color = "rgba(0,200,0,0.35)" }) {
 }
 
 export default function App() {
+  const [zoom, setZoom] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const lastTouchDistance = useRef(null);
+  const lastTouchMidpoint = useRef({ x: 0, y: 0 });
+  const lastOffset = useRef({ x: 0, y: 0 });
 
 const getDistance = (touches) => {
     const [a, b] = touches;
