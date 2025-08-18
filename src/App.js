@@ -766,6 +766,22 @@ export default function App() {
                           <ConeSVG length={140} angle={45} color={coneColorFor(m.typeId)} />
                         </div>
                       )}
+{/* Cone rendering + debug log */}
+{isConeType(m.typeId) && (
+  <>
+    {console.log(
+      "Rendering cone for",
+      m.typeId,
+      "->",
+      coneColorFor(m.typeId)
+    )}
+    <ConeSVG
+      color={coneColorFor(m.typeId)}
+      rotation={m.rotation || 0}
+    />
+  </>
+)}
+
 
                       {/* Icon (above) */}
                       <div style={{ position: "relative", zIndex: 1 }}>{content}</div>
