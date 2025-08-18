@@ -122,8 +122,18 @@ export default function App() {
 
   const isConeType = (typeId) => typeId === "camera" || typeId === "projector" || typeId === "speaker";
 
-  const coneColorFor = (typeId) =>
-    typeId === "projector" ? "rgba(255, 204, 0, 0.35)" : "rgba(0, 200, 0, 0.35)";
+  const coneColorFor = (typeId) => {
+  switch (typeId) {
+    case "camera":
+      return "rgba(255, 0, 0, 0.35)";      // red
+    case "projector":
+      return "rgba(255, 204, 0, 0.35)";    // yellow
+    case "speaker":
+      return "rgba(255, 165, 0, 0.35)";    // orange
+    default:
+      return "rgba(0, 200, 0, 0.35)";      // fallback green
+  }
+};
 
   // -------------- Import --------------
 
