@@ -36,8 +36,6 @@ function ConeSVG({ length = 140, angle = 45, color = "rgba(0,200,0,0.35)" }) {
 }
 
 export default function App() {
-
-export default function App() {
   // ... all your existing state, refs, helpers (zoom/drag/rotate/etc)
 
   // --- Part 3: Pinch-to-zoom & pan handlers ---
