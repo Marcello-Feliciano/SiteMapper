@@ -168,3 +168,4 @@
     </TransformComponent>
   </TransformWrapper>
 </div>
+export default App;
