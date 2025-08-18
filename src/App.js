@@ -793,8 +793,94 @@ export default function App() {
         top: `${m.y * 100}%`,
         transform: "translate(-50%, -50%)",
         cursor: "grab",
+{placed.map((m) => {
+  const type = markerTypes.find((t) => t.id === m.typeId);
+  const showCone = isConeType(m.typeId);
+  const rotation = typeof m.rotation === "number" ? m.rotation : 0;
+
+  const content = type?.iconSrc ? (
+    <img
+      src={type.iconSrc}
+      alt={type?.label || "icon"}
+      style={{
+        width: 32,
+        height: 32,
+        minWidth: 32,
+        minHeight: 32,
+        objectFit: "contain",
+        pointerEvents: "none",
+      }}
+      draggable={false}
+    />
+  ) : null;
+
+  return (
+    <div
+      key={m.id}
+      data-marker-id={m.id}
+      onDoubleClick={() => removeMarker(m.id)}
+      onClick={(e) => {
+        if (!showCone) return;
+        if (justDraggedRef.current) return;
+        e.stopPropagation();
+        setActiveRotateId((cur) => (cur === m.id ? null : m.id));
+      }}
+      onMouseDown={(e) => {
+        setDraggingId(m.id);
+        setDragOffset({ x: e.clientX - m.x, y: e.clientY - m.y });
+      }}
+      onMouseMove={(e) => {
+        if (draggingId === m.id) {
+          setPlaced((ms) =>
+            ms.map((mm) =>
+              mm.id === m.id
+                ? { ...mm, x: (e.clientX - dragOffset.x) / stageRef.current.offsetWidth,
+                    y: (e.clientY - dragOffset.y) / stageRef.current.offsetHeight }
+                : mm
+            )
+          );
+        }
+      }}
+      onMouseUp={() => setDraggingId(null)}
+      onTouchStart={(e) => {
+        if (e.touches.length === 1) {
+          e.preventDefault(); // allow drag, block scroll
+          const touch = e.touches[0];
+          setDraggingId(m.id);
+          setDragOffset({
+            x: touch.clientX - m.x * stageRef.current.offsetWidth,
+            y: touch.clientY - m.y * stageRef.current.offsetHeight,
+          });
+        } else {
+          setDraggingId(null); // 2+ fingers → let browser pinch zoom
+        }
+      }}
+      onTouchMove={(e) => {
+        if (draggingId === m.id && e.touches.length === 1) {
+          e.preventDefault();
+          const touch = e.touches[0];
+          setPlaced((ms) =>
+            ms.map((mm) =>
+              mm.id === m.id
+                ? { ...mm,
+                    x: (touch.clientX - dragOffset.x) / stageRef.current.offsetWidth,
+                    y: (touch.clientY - dragOffset.y) / stageRef.current.offsetHeight }
+                : mm
+            )
+          );
+        }
+      }}
+      onTouchEnd={(e) => {
+        if (e.touches.length === 0) setDraggingId(null);
+      }}
+      style={{
+        position: "absolute",
+        left: `${m.x * 100}%`,
+        top: `${m.y * 100}%`,
+        transform: "translate(-50%, -50%)",
+        cursor: "grab",
         userSelect: "none",
-        touchAction: "none",
+        touchAction: "none", // we handle touch manually
         background: "transparent",
         padding: 0,
         boxShadow: "none",
@@ -805,7 +891,7 @@ export default function App() {
           : "Drag to move • Double-click to delete"
       }
     >
-      {/* Cone (behind icon) */}
+      {/* Cone */}
       {showCone && (
         <div
           style={{
@@ -821,10 +907,10 @@ export default function App() {
         </div>
       )}
 
-      {/* Icon (above) */}
+      {/* Icon */}
       <div style={{ position: "relative", zIndex: 1 }}>{content}</div>
 
-      {/* Rotation handle (visible when active) */}
+      {/* Rotation handle */}
       {showCone && activeRotateId === m.id && (
         <div
           data-rotate-handle
@@ -848,6 +934,7 @@ export default function App() {
     </div>
   );
 })}
+
 
 
       {/* Export filename modal */}
