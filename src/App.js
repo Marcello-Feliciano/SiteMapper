@@ -696,7 +696,7 @@ export default function App() {
                   position: "absolute",
                   inset: 0,
                   borderRadius: 8,
-                  pointerEvents: "auto",
+                  pointerEvents: "none",
                   touchAction: "auto", // important for touch-to-drag behavior
                 }}
               >
