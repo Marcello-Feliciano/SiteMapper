@@ -67,8 +67,8 @@ const getDistance = (touches) => {
     const scaleChange = dist / lastTouchDistance.current;
 
     // Apply controlled factor for smooth global zoom
-    const zoomFactor = 0.01; // smaller = slower zoom
-    const deltaZoom = (scaleChange - 1.1) / zoomFactor;
+    const zoomFactor = 0.02; // smaller = slower zoom
+    const deltaZoom = (scaleChange - 1) / zoomFactor;
     const newZoom = Math.min(Math.max(zoom + deltaZoom, 0.5), 2);
 
     // Optional: adjust offset to keep zoom centered around midpoint
