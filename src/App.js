@@ -2,682 +2,242 @@ import React, { useRef, useState } from "react";
 import html2canvas from "html2canvas";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 
-// ---------- Cone SVG helper (45° total angle, soft fade) ----------
+// ---------- Cone SVG helper ----------
 function ConeSVG({ length = 140, angle = 45, color = "rgba(0,200,0,0.35)" }) {
   const half = angle / 2;
   const rad = (deg) => (deg * Math.PI) / 180;
-
-  const x1 = Math.sin(rad(-half)) * length;
-  const y1 = -Math.cos(rad(-half)) * length;
-  const x2 = Math.sin(rad(half)) * length;
-  const y2 = -Math.cos(rad(half)) * length;
-
+  const x1 = length * Math.cos(rad(-half));
+  const y1 = length * Math.sin(rad(-half));
+  const x2 = length * Math.cos(rad(half));
+  const y2 = length * Math.sin(rad(half));
   return (
-    <svg
-      width={length * 2}
-      height={length * 2}
-      viewBox={[-length, -length, length * 2, length * 2].join(" ")}
-      style={{ display: "block", pointerEvents: "none" }}
-    >
-      <defs>
-        <linearGradient id="coneGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.6" />
-          <stop offset="100%" stopColor={color} stopOpacity="0.0" />
-        </linearGradient>
-      </defs>
-      <path d={`M 0 0 L ${x1} ${y1} L ${x2} ${y2} Z`} fill="url(#coneGrad)" />
+    <svg width={length * 2} height={length * 2} style={{ position: "absolute", left: -length, top: -length }}>
+      <path
+        d={`M${length},${length} L${x1 + length},${y1 + length} A${length},${length} 0 0,1 ${x2 + length},${
+          y2 + length
+        } Z`}
+        fill={color}
+      />
     </svg>
   );
 }
 
 export default function App() {
-  // --- Image + layout state ---
-  const [imageSrc, setImageSrc] = useState(null); // dataURL of uploaded image
+  const [imageSrc, setImageSrc] = useState(null);
+  const [markers, setMarkers] = useState([]);
+  const [activeId, setActiveId] = useState(null);
+  const [activeRotateId, setActiveRotateId] = useState(null);
+  const [dragOffset, setDragOffset] = useState(null);
+  const [showCone, setShowCone] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+
   const imgRef = useRef(null);
   const stageRef = useRef(null);
 
-  // NEW: wrapper & overlay so markers align 1:1 with the displayed image box
-  const imageWrapRef = useRef(null);
-  const overlayRef = useRef(null);
-
-  // --- Marker palette + selection ---
+  // ---------- Marker Types ----------
   const markerTypes = [
-    { id: "camera", label: "Camera", iconSrc: require("./assets/camera.png") },
-    { id: "door", label: "Door", iconSrc: require("./assets/door.png") },
-    { id: "cardreader", label: "Card", iconSrc: require("./assets/card.png") },
-    { id: "tv", label: "TV", iconSrc: require("./assets/tv.png") },
-    { id: "wifi", label: "Wi-Fi", iconSrc: require("./assets/wifi.png") },
-    { id: "projector", label: "Proj", iconSrc: require("./assets/projector.png") },
-    { id: "speaker", label: "Speaker", iconSrc: require("./assets/speaker.png") },
-    { id: "rack", label: "Rack", iconSrc: require("./assets/rack.png") },
-    { id: "vape", label: "Vape", iconSrc: require("./assets/vape.png") },
+    { type: "camera", icon: "📷" },
+    { type: "door", icon: "🚪" },
+    { type: "wifi", icon: "📡" },
+    { type: "tv", icon: "📺" },
   ];
-  const [selectedTypeId, setSelectedTypeId] = useState(null);
 
-  // --- Placed markers (normalized coords 0..1)
-  const [placed, setPlaced] = useState([]); // {id, typeId, x, y, iconSrc, rotation?}
+  const coneColorFor = (t) =>
+    t === "camera" ? "rgba(0,200,0,0.35)" : t === "wifi" ? "rgba(0,0,200,0.25)" : "rgba(200,0,0,0.25)";
 
-  // --- File inputs ---
-  const importInputRef = useRef(null);
-
-  // --- Export filename modal ---
-  const [showExportModal, setShowExportModal] = useState(false);
-  const [exportFilename, setExportFilename] = useState("layout");
-
-  // --- Drag state (move markers) ---
-  // pending: pointerdown happened on a marker but hasn't moved far yet
-  // active: actual drag in progress
-  const dragState = useRef({
-    pending: false,
-    active: false,
-    id: null,
-    startX: 0,
-    startY: 0,
-    initialX: 0,
-    initialY: 0,
-    moved: false,
-    pointerId: null,
-  });
-
-  // --- Rotation state (rotate cones) ---
-  const rotateState = useRef({
-    active: false,
-    id: null,
-    pointerId: null,
-  });
-  const [activeRotateId, setActiveRotateId] = useState(null);
-
-  // suppress a click right after dragging so we don't place a new marker
-  const justDraggedRef = useRef(false);
-
-  // -------------- Helpers --------------
-
-  const getSelectedType = () =>
-    markerTypes.find((m) => m.id === selectedTypeId) || null;
-
-  const readFileAsDataURL = (file) =>
-    new Promise((resolve, reject) => {
-      const fr = new FileReader();
-      fr.onload = () => resolve(fr.result);
-      fr.onerror = reject;
-      fr.readAsDataURL(file);
-    });
-
-  const imageToDataURL = (src) =>
-    new Promise((resolve, reject) => {
-      if (!src) return reject(new Error("No image"));
-      if (src.startsWith("data:")) return resolve(src);
-      const img = new Image();
-      img.crossOrigin = "anonymous";
-      img.onload = () => {
-        const c = document.createElement("canvas");
-        c.width = img.naturalWidth;
-        c.height = img.naturalHeight;
-        const ctx = c.getContext("2d");
-        ctx.drawImage(img, 0, 0);
-        resolve(c.toDataURL("image/png"));
-      };
-      img.onerror = () => reject(new Error("Failed to load image"));
-      img.src = src;
-    });
-
-  const isConeType = (typeId) => typeId === "camera" || typeId === "projector" || typeId === "speaker";
-
-  const coneColorFor = (typeId) => {
-  switch (typeId) {
-    case "camera":
-      return "rgba(255, 0, 0, 0.35)";      // red
-    case "projector":
-      return "rgba(255, 204, 0, 0.35)";    // yellow
-    case "speaker":
-      return "rgba(255, 165, 0, 0.35)";    // orange
-    default:
-      return "rgba(0, 200, 0, 0.35)";      // fallback green
-  }
-};
-
-  // -------------- Import --------------
-
-  const handleImportClick = () => importInputRef.current?.click();
-
-  const handleImportChange = async (e) => {
+  // ---------- File Import ----------
+  const handleImport = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    if (file.type === "application/json") {
-      try {
-        const text = await file.text();
-        const data = JSON.parse(text);
-        if (!data.imageData || !Array.isArray(data.markers))
-          throw new Error("Invalid JSON");
-        setImageSrc(data.imageData);
-        setPlaced(
-          data.markers.map((m) => ({
-            id: m.id || crypto.randomUUID(),
-            typeId: m.typeId,
-            x: m.x,
-            y: m.y,
-            iconSrc: markerTypes.find((t) => t.id === m.typeId)?.iconSrc,
-            rotation:
-              typeof m.rotation === "number"
-                ? m.rotation
-                : isConeType(m.typeId)
-                ? 0
-                : null,
-          }))
-        );
-      } catch (err) {
-        alert("Failed to import JSON: " + err.message);
-      }
-    } else if (file.type.startsWith("image/")) {
-      const dataURL = await readFileAsDataURL(file);
-      setImageSrc(dataURL);
-      setPlaced([]);
-    } else {
-      alert("Unsupported file type. Use PNG/JPG or a saved JSON.");
+    if (file.type.startsWith("image/")) {
+      const reader = new FileReader();
+      reader.onload = () => setImageSrc(reader.result);
+      reader.readAsDataURL(file);
+    } else if (file.name.endsWith(".json")) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const data = JSON.parse(reader.result);
+        setImageSrc(data.imageSrc);
+        setMarkers(data.markers || []);
+      };
+      reader.readAsText(file);
     }
-
-    e.target.value = "";
   };
 
-  // -------------- Export --------------
+  // ---------- File Export ----------
+  const handleExport = async () => {
+    if (!stageRef.current) return;
+    const node = stageRef.current;
+    const canvas = await html2canvas(node, { backgroundColor: null, useCORS: true });
+    const pngUrl = canvas.toDataURL("image/png");
 
-  const exportJSONandPNG = async (filenameBase) => {
-    if (!imageSrc || !stageRef.current || !imgRef.current) return;
+    const json = JSON.stringify({ imageSrc, markers });
+    const blob = new Blob([json], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "layout.json";
+    a.click();
 
-    const safeName = (filenameBase || "layout").trim() || "layout";
-
-    let embeddedImage = imageSrc;
-    try {
-      embeddedImage = await imageToDataURL(imageSrc);
-    } catch {
-      /* continue even if conversion fails */
-    }
-    const json = {
-      version: 1,
-      exportedAt: new Date().toISOString(),
-      imageData: embeddedImage,
-      markers: placed.map((m) => ({
-        id: m.id,
-        typeId: m.typeId,
-        x: m.x,
-        y: m.y,
-        iconSrc: m.iconSrc,
-        ...(typeof m.rotation === "number" ? { rotation: m.rotation } : {}),
-      })),
-    };
-    const jsonBlob = new Blob([JSON.stringify(json, null, 2)], {
-      type: "application/json",
-    });
-    const jsonUrl = URL.createObjectURL(jsonBlob);
-    const a1 = document.createElement("a");
-    a1.href = jsonUrl;
-    a1.download = `${safeName}.json`;
-    a1.click();
-    URL.revokeObjectURL(jsonUrl);
-
-    // Scale html2canvas to the natural image resolution
-    const imgEl = imgRef.current;
-    const displayedW = imgEl.clientWidth;
-    const displayedH = imgEl.clientHeight;
-    const naturalW = imgEl.naturalWidth || displayedW;
-    const naturalH = imgEl.naturalHeight || displayedH;
-
-    const scaleX = naturalW / Math.max(1, displayedW);
-    const scaleY = naturalH / Math.max(1, displayedH);
-    const scale = Math.max(scaleX, scaleY);
-
-    const canvas = await html2canvas(stageRef.current, {
-      useCORS: true,
-      backgroundColor: null,
-      scale,
-      onclone: (clonedDoc) => {
-        const clonedImg = clonedDoc.getElementById("floorplan-image");
-        if (clonedImg) {
-          clonedImg.style.width = `${displayedW}px`;
-          clonedImg.style.height = "auto";
-          clonedImg.style.maxWidth = "none";
-          clonedImg.style.maxHeight = "none";
-        }
-      },
-    });
-
-    const a2 = document.createElement("a");
-    a2.href = canvas.toDataURL("image/png");
-    a2.download = `${safeName}.png`;
-    a2.click();
+    const link = document.createElement("a");
+    link.href = pngUrl;
+    link.download = "layout.png";
+    link.click();
   };
 
-  // -------------- Marker palette --------------
-
-  const toggleSelectType = (typeId) => {
-    setSelectedTypeId((cur) => (cur === typeId ? null : typeId));
-  };
-
-  // -------------- Placement + dragging --------------
-
+  // ---------- Place Markers ----------
   const placeMarkerAtEvent = (e) => {
-    if (!getSelectedType() && !e.target.closest?.("[data-marker-id]")) {
-      setActiveRotateId(null);
-    }
-
-    if (!getSelectedType() || !overlayRef.current) return;
-
-    const onMarker = e.target.closest?.("[data-marker-id]");
-    const onRotate = e.target.closest?.("[data-rotate-handle]");
-    if (onMarker || onRotate) return;
-
-    if (justDraggedRef.current) {
-      justDraggedRef.current = false;
-      return;
-    }
-
-    const rect = overlayRef.current.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / rect.width;
-    const y = (e.clientY - rect.top) / rect.height;
-    if (x < 0 || x > 1 || y < 0 || y > 1) return;
-
-    const type = getSelectedType();
-    setPlaced((list) => [
-      ...list,
-      {
-        id: crypto.randomUUID(),
-        typeId: type.id,
-        x,
-        y,
-        iconSrc: type.iconSrc,
-        rotation: isConeType(type.id) ? 0 : null,
-      },
+    if (!activeId) return;
+    const rect = stageRef.current.getBoundingClientRect();
+    setMarkers((prev) => [
+      ...prev,
+      { id: Date.now(), type: activeId, x: e.clientX - rect.left, y: e.clientY - rect.top, rotation: 0 },
     ]);
   };
 
-  // Begin a pending drag (do not immediately set pointer capture)
-  const beginPendingDrag = (id, e) => {
-    if (!overlayRef.current) return;
-
-    // Ignore rotate-handle pointerdowns here
-    if (e.target.closest?.("[data-rotate-handle]")) return;
-
-    const marker = placed.find((m) => m.id === id);
-    if (!marker) return;
-
-    dragState.current = {
-      pending: true,
-      active: false,
-      id,
-      startX: e.clientX,
-      startY: e.clientY,
-      initialX: marker.x,
-      initialY: marker.y,
-      moved: false,
-      pointerId: e.pointerId,
-    };
-    // do not call preventDefault or setPointerCapture here so clicks fire
+  // ---------- Drag / Rotate ----------
+  const startDrag = (id, e) => {
+    const rect = stageRef.current.getBoundingClientRect();
+    const marker = markers.find((m) => m.id === id);
+    setDragOffset({ id, dx: e.clientX - rect.left - marker.x, dy: e.clientY - rect.top - marker.y });
   };
 
-  // Begin rotating when user drags the handle
-  const startRotate = (markerId, e) => {
-    if (!overlayRef.current) return;
+  const startRotate = (id, e) => {
+    setActiveRotateId(id);
     e.stopPropagation();
     e.preventDefault();
-
-    // ensure visible (harmless if already visible)
-    setActiveRotateId(markerId);
-
-    const pointerId = e.pointerId;
-    rotateState.current = { active: true, id: markerId, pointerId };
-    try {
-      overlayRef.current.setPointerCapture(pointerId);
-    } catch {}
   };
 
-  // pointer move: handle rotation first, then potential pending->active drag, then active drag
-  const onPointerMove = (e) => {
-    // Rotation drag
-    if (rotateState.current.active && overlayRef.current) {
-      const rect = overlayRef.current.getBoundingClientRect();
-      const marker = placed.find((m) => m.id === rotateState.current.id);
-      if (marker) {
-        const cx = rect.left + marker.x * rect.width;
-        const cy = rect.top + marker.y * rect.height;
-
-        const dx = e.clientX - cx;
-        const dy = e.clientY - cy;
-
-        const angleFromX = (Math.atan2(dy, dx) * 180) / Math.PI;
-        const angleUp = angleFromX - 90; // so 0° is up
-        const normalized = ((angleUp % 360) + 360) % 360;
-
-        setPlaced((list) =>
-          list.map((m) => (m.id === marker.id ? { ...m, rotation: normalized } : m))
-        );
-      }
-      return;
+  const handleMove = (e) => {
+    if (dragOffset) {
+      const rect = stageRef.current.getBoundingClientRect();
+      setMarkers((prev) =>
+        prev.map((m) =>
+          m.id === dragOffset.id
+            ? { ...m, x: e.clientX - rect.left - dragOffset.dx, y: e.clientY - rect.top - dragOffset.dy }
+            : m
+        )
+      );
+    } else if (activeRotateId) {
+      const rect = stageRef.current.getBoundingClientRect();
+      const marker = markers.find((m) => m.id === activeRotateId);
+      const cx = marker.x + 25;
+      const cy = marker.y + 25;
+      const angle = Math.atan2(e.clientY - rect.top - cy, e.clientX - rect.left - cx);
+      setMarkers((prev) => prev.map((m) => (m.id === activeRotateId ? { ...m, rotation: (angle * 180) / Math.PI } : m)));
     }
-
-    // If we have a pending pointerdown, promote if moved enough
-    if (dragState.current.pending && !dragState.current.active) {
-      const dxPx = Math.abs(e.clientX - dragState.current.startX);
-      const dyPx = Math.abs(e.clientY - dragState.current.startY);
-      if (dxPx > 4 || dyPx > 4) {
-        // Promote to active drag
-        dragState.current.active = true;
-        dragState.current.moved = true;
-        try {
-          overlayRef.current.setPointerCapture(dragState.current.pointerId);
-        } catch {}
-      } else {
-        // still a tap candidate — do not update location yet
-        return;
-      }
-    }
-
-    // Move drag (active)
-    if (!dragState.current.active || !overlayRef.current) return;
-
-    const rect = overlayRef.current.getBoundingClientRect();
-    const dx = (e.clientX - dragState.current.startX) / rect.width;
-    const dy = (e.clientY - dragState.current.startY) / rect.height;
-
-    if (!dragState.current.moved) {
-      if (Math.abs(e.clientX - dragState.current.startX) > 2 || Math.abs(e.clientY - dragState.current.startY) > 2) {
-        dragState.current.moved = true;
-      }
-    }
-
-    const newX = dragState.current.initialX + dx;
-    const newY = dragState.current.initialY + dy;
-    const clampedX = Math.max(0, Math.min(1, newX));
-    const clampedY = Math.max(0, Math.min(1, newY));
-
-    setPlaced((list) =>
-      list.map((m) =>
-        m.id === dragState.current.id ? { ...m, x: clampedX, y: clampedY } : m
-      )
-    );
   };
 
-  // endDrag handles rotation end, pending-click reset, and finishing active drag
-  const endDrag = (e) => {
-    // finish rotation drag?
-    if (rotateState.current.active) {
-      try {
-        if (overlayRef.current && rotateState.current.pointerId != null) {
-          overlayRef.current.releasePointerCapture(rotateState.current.pointerId);
-        }
-      } catch {}
-      rotateState.current = { active: false, id: null, pointerId: null };
-      // prevent accidental placement
-      justDraggedRef.current = true;
-      setTimeout(() => (justDraggedRef.current = false), 0);
-      return;
-    }
-
-    // If it was a pending tap (no move) -> do nothing here; click handler on marker handles toggle
-    if (dragState.current.pending && !dragState.current.active && !dragState.current.moved) {
-      // reset pending state; onClick will already have fired (toggle handled there)
-      dragState.current = {
-        pending: false,
-        active: false,
-        id: null,
-        startX: 0,
-        startY: 0,
-        initialX: 0,
-        initialY: 0,
-        moved: false,
-        pointerId: null,
-      };
-      return;
-    }
-
-    // finish an active move drag
-    if (!dragState.current.active) return;
-
-    e.stopPropagation();
-    e.preventDefault();
-
-    if (dragState.current.moved) {
-      justDraggedRef.current = true;
-      setTimeout(() => {
-        justDraggedRef.current = false;
-      }, 0);
-    }
-
-    try {
-      if (overlayRef.current && dragState.current.pointerId != null) {
-        overlayRef.current.releasePointerCapture(dragState.current.pointerId);
-      }
-    } catch {}
-
-    dragState.current = {
-      pending: false,
-      active: false,
-      id: null,
-      startX: 0,
-      startY: 0,
-      initialX: 0,
-      initialY: 0,
-      moved: false,
-      pointerId: null,
-    };
+  const handleUp = () => {
+    setDragOffset(null);
+    setActiveRotateId(null);
   };
 
-  const removeMarker = (id) => {
-    setPlaced((list) => list.filter((m) => m.id !== id));
-    if (activeRotateId === id) setActiveRotateId(null);
-  };
-
-  // -------------- UI --------------
-
+  // ---------- UI ----------
   return (
-  <div
-    style={{
-      fontFamily: "Inter, system-ui, Arial, sans-serif",
-      background: "#f5f7fb",
-      minHeight: "100vh",
-    }}
-  >
-    {/* Header and menus stay outside zoom wrapper */}
-    <header style={{ padding: "10px", background: "#fff" }}>
-      <h2>Site Mapper</h2>
-    </header>
+    <div style={{ fontFamily: "Inter, system-ui", background: "#f5f7fb", minHeight: "100vh" }}>
+      <header style={{ height: 60, background: "#334", color: "white", display: "flex", alignItems: "center", padding: "0 16px" }}>
+        <h1 style={{ fontSize: 20, flexGrow: 1 }}>Site Mapper</h1>
+        <button onClick={() => setShowCone((p) => !p)} style={{ marginRight: 8 }}>
+          {showCone ? "Hide Cones" : "Show Cones"}
+        </button>
+        <input type="file" accept=".png,.jpg,.jpeg,.json" onChange={handleImport} />
+        <button onClick={() => setShowExportModal(true)}>Export</button>
+      </header>
 
-    <main style={{ display: "flex", flexDirection: "column", padding: 10 }}>
-      {/* Import/export buttons, dropdowns, etc. stay outside */}
-
-      {/* Zoom + Pan wrapper */}
-      <div
-        style={{
-          position: "relative",
-          flex: 1,
-          border: "1px solid #ccc",
-          overflow: "hidden",
-          borderRadius: 8,
-          marginTop: 10,
-        }}
-      >
-        <TransformWrapper
-          wheel={{ step: 0.2 }}
-          pinch={{ step: 5 }}
-          doubleClick={{ disabled: true }}
-          panning={{ velocityDisabled: true }}
-        >
-          <TransformComponent>
-            <div
-              ref={overlayRef}
-              style={{
-                position: "relative",
-                width: "100%",
-                height: "100%",
-              }}
-              onClick={placeMarkerAtEvent}
-              onPointerDown={(e) => {
-                const handleEl =
-                  e.target.closest && e.target.closest("[data-rotate-handle]");
-                if (handleEl) {
-                  startRotate(handleEl.getAttribute("data-marker-id"), e);
-                  return;
-                }
-                const markerEl =
-                  e.target.closest && e.target.closest("[data-marker-id]");
-                if (markerEl) {
-                  startDrag(markerEl.getAttribute("data-marker-id"), e);
-                  return;
-                }
-              }}
-              onPointerMove={onPointerMove}
-              onPointerUp={endInteraction}
+      <main style={{ padding: 16, display: "grid", gridTemplateColumns: "200px 1fr", gap: 16 }}>
+        <aside>
+          <h2>Markers</h2>
+          {markerTypes.map((mt) => (
+            <button
+              key={mt.type}
+              onClick={() => setActiveId((p) => (p === mt.type ? null : mt.type))}
+              style={{ display: "block", marginBottom: 8, background: activeId === mt.type ? "#ccf" : "white" }}
             >
-              {/* Floorplan image */}
+              {mt.icon} {mt.type}
+            </button>
+          ))}
+        </aside>
+
+        <div
+          ref={stageRef}
+          onClick={placeMarkerAtEvent}
+          onPointerMove={handleMove}
+          onPointerUp={handleUp}
+          style={{
+            position: "relative",
+            overflow: "hidden",
+            background: "#eee",
+            minHeight: 500,
+            touchAction: "none", // important for pinch-zoom
+          }}
+        >
+          <TransformWrapper minScale={0.5} maxScale={4} wheel={{ step: 0.2 }}>
+            <TransformComponent>
               {imageSrc && (
                 <img
                   ref={imgRef}
                   src={imageSrc}
                   alt="floorplan"
-                  style={{
-                    display: "block",
-                    maxWidth: "100%",
-                    maxHeight: "100%",
-                    objectFit: "contain",
-                  }}
+                  style={{ maxWidth: "100%", display: "block" }}
+                  draggable={false}
                 />
               )}
 
-              {/* Render markers */}
-              {markers.map((m) => {
-                const rotation = rotations[m.id] || 0;
-                return (
+              {markers.map((m) => (
+                <div
+                  key={m.id}
+                  data-marker-id={m.id}
+                  style={{
+                    position: "absolute",
+                    left: m.x,
+                    top: m.y,
+                    width: 50,
+                    height: 50,
+                    transform: `rotate(${m.rotation}deg)`,
+                    transformOrigin: "center",
+                    cursor: "grab",
+                  }}
+                  onPointerDown={(e) => {
+                    const handleEl = e.target.closest("[data-rotate-handle]");
+                    if (handleEl) startRotate(m.id, e);
+                    else startDrag(m.id, e);
+                    e.stopPropagation();
+                  }}
+                >
+                  <div style={{ fontSize: 32, textAlign: "center" }}>
+                    {markerTypes.find((mt) => mt.type === m.type)?.icon || "❓"}
+                  </div>
+                  {showCone && <ConeSVG color={coneColorFor(m.type)} />}
                   <div
-                    key={m.id}
-                    data-marker-id={m.id}
+                    data-rotate-handle
                     style={{
                       position: "absolute",
-                      left: m.x,
-                      top: m.y,
-                      transform: `translate(-50%,-50%) rotate(${rotation}deg)`,
-                      userSelect: "none",
+                      left: "50%",
+                      top: "50%",
+                      transform: "translate(-50%,-50%) translate(0,-70px)",
+                      width: 20,
+                      height: 20,
+                      background: "orange",
+                      borderRadius: "50%",
                       cursor: "grab",
                     }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleSelect(m.id);
-                    }}
-                  >
-                    <img
-                      src={markerTypes.find((t) => t.type === m.type)?.iconSrc}
-                      alt={m.type}
-                      width={40}
-                      height={40}
-                      draggable={false}
-                    />
-                    {showCone && activeRotateId === m.id && (
-                      <div
-                        data-rotate-handle
-                        data-marker-id={m.id}
-                        style={{
-                          position: "absolute",
-                          left: "50%",
-                          top: "50%",
-                          transform: `translate(-50%,-50%) rotate(${rotation}deg) translate(0, -70px)`,
-                          transformOrigin: "50% 50%",
-                          cursor: "grab",
-                        }}
-                      >
-                        <ConeSVG
-                          length={140}
-                          angle={45}
-                          color={coneColorFor(m.type)}
-                        />
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </TransformComponent>
-        </TransformWrapper>
-      </div>
-    </main>
-  </div>
-);
+                  />
+                </div>
+              ))}
+            </TransformComponent>
+          </TransformWrapper>
+        </div>
+      </main>
 
-      {/* Export filename modal */}
       {showExportModal && (
-        <div
-          onClick={() => setShowExportModal(false)}
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(2,6,23,.5)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 50,
-          }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              width: 360,
-              background: "#fff",
-              borderRadius: 14,
-              boxShadow: "0 16px 48px rgba(16,24,40,.2)",
-              padding: 18,
-              display: "flex",
-              flexDirection: "column",
-              gap: 12,
-            }}
-          >
-            <div style={{ fontWeight: 700, fontSize: 16 }}>Export filename</div>
-            <input
-              value={exportFilename}
-              onChange={(e) => setExportFilename(e.target.value)}
-              placeholder="layout"
-              autoFocus
-              style={{
-                padding: "10px 12px",
-                borderRadius: 10,
-                border: "1px solid #e2e8f0",
-                outline: "none",
-                fontSize: 14,
-              }}
-            />
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-              <button
-                onClick={() => setShowExportModal(false)}
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: 10,
-                  background: "#f3f4f6",
-                  border: "1px solid #e5e7eb",
-                  cursor: "pointer",
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  exportJSONandPNG(exportFilename);
-                  setShowExportModal(false);
-                }}
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: 10,
-                  background: "#1976d2",
-                  color: "#fff",
-                  border: "none",
-                  cursor: "pointer",
-                  fontWeight: 600,
-                }}
-              >
-                Export
-              </button>
-            </div>
-            <div style={{ color: "#6b7280", fontSize: 12 }}>
-              Exports <b>.json</b> (image + markers) and <b>.png</b> (full layout).
-            </div>
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", justifyContent: "center", alignItems: "center" }}>
+          <div style={{ background: "white", padding: 20 }}>
+            <h3>Export Options</h3>
+            <button onClick={handleExport}>Download PNG + JSON</button>
+            <button onClick={() => setShowExportModal(false)}>Close</button>
           </div>
         </div>
       )}
     </div>
-  );}
+  );
+}
