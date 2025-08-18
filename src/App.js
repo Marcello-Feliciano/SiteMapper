@@ -697,13 +697,14 @@ const getDistance = (touches) => {
               padding: 8, // this padding no longer throws markers off
               maxWidth: "min(95vw, 1200px)",
               overflow: "auto",
-              touchAction: "none",
+              touchAction: "auto",
               transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})`,
               transformOrigin: "0 0",
             }}
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
+            onTouchCancel={handleTouchEnd}
           >
             {/* Image + overlay wrapper */}
             <div
