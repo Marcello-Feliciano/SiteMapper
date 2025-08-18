@@ -2,32 +2,36 @@ import React, { useRef, useState } from "react";
 import html2canvas from "html2canvas";
 
 // ---------- Cone SVG helper (45° total angle, soft fade) ----------
-function ConeSVG({ length = 140, angle = 45, color = "rgba(0,200,0,0.35)" }) {
-  const half = angle / 2;
-  const rad = (deg) => (deg * Math.PI) / 180;
+function ConeSVG({ id, length = 140, angle = 45, color = "rgba(0,200,0,0.35)" }) {
+  // Use the marker's unique ID for gradient
+  const gradientId = `coneGradient-${id}`;
 
-  const x1 = Math.sin(rad(-half)) * length;
-  const y1 = -Math.cos(rad(-half)) * length;
-  const x2 = Math.sin(rad(half)) * length;
-  const y2 = -Math.cos(rad(half)) * length;
+  // Calculate the cone shape using polar coordinates
+  const halfAngle = (angle / 2) * (Math.PI / 180);
+  const x = length * Math.sin(halfAngle);
+  const y = length * Math.cos(halfAngle);
+
+  // Cone path is a triangle from (0,0) pointing up
+  const pathData = `M0,0 L${x},${y} L${-x},${y} Z`;
 
   return (
     <svg
       width={length * 2}
-      height={length * 2}
-      viewBox={[-length, -length, length * 2, length * 2].join(" ")}
-      style={{ display: "block", pointerEvents: "none" }}
+      height={length}
+      viewBox={`${-length} 0 ${length * 2} ${length}`}
+      style={{ overflow: "visible" }}
     >
       <defs>
-        <linearGradient id="coneGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.6" />
-          <stop offset="100%" stopColor={color} stopOpacity="0.0" />
+        <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="1" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
         </linearGradient>
       </defs>
-      <path d={`M 0 0 L ${x1} ${y1} L ${x2} ${y2} Z`} fill="url(#coneGrad)" />
+      <path d={pathData} fill={`url(#${gradientId})`} />
     </svg>
   );
 }
+
 
 export default function App() {
   // --- Image + layout state ---
@@ -701,103 +705,104 @@ export default function App() {
                 }}
               >
                 {/* Markers layer */}
-{placed.map((m) => {
-  const type = markerTypes.find((t) => t.id === m.typeId);
-  const showCone = isConeType(m.typeId);
-  const rotation = typeof m.rotation === "number" ? m.rotation : 0;
+                {placed.map((m) => {
+                  const type = markerTypes.find((t) => t.id === m.typeId);
+                  const showCone = isConeType(m.typeId);
+                  const rotation = typeof m.rotation === "number" ? m.rotation : 0;
+                
+                  const content = type?.iconSrc ? (
+                    <img
+                      src={type.iconSrc}
+                      alt={type?.label || "icon"}
+                      style={{
+                        width: 32,
+                        height: 32,
+                        minWidth: 32,
+                        minHeight: 32,
+                        objectFit: "contain",
+                        pointerEvents: "none",
+                      }}
+                    />
+                  ) : null;
+                
+                  return (
+                    <div
+                      key={m.id}
+                      data-marker-id={m.id}
+                      onDoubleClick={() => removeMarker(m.id)}
+                      onClick={(e) => {
+                        if (!showCone) return;
+                        if (justDraggedRef.current) return;
+                        e.stopPropagation();
+                        setActiveRotateId((cur) => (cur === m.id ? null : m.id));
+                      }}
+                      style={{
+                        position: "absolute",
+                        left: `${m.x * 100}%`,
+                        top: `${m.y * 100}%`,
+                        transform: "translate(-50%, -50%)",
+                        cursor: "grab",
+                        userSelect: "none",
+                        touchAction: "none",
+                        background: "transparent",
+                        padding: 0,
+                        boxShadow: "none",
+                      }}
+                      title={
+                        showCone
+                          ? "Click to rotate • Drag to move • Double-click to delete"
+                          : "Drag to move • Double-click to delete"
+                      }
+                    >
+                      {/* Cone (behind icon) */}
+                      {showCone && (
+                        <div
+                          style={{
+                            position: "absolute",
+                            left: "50%",
+                            top: "50%",
+                            transform: `translate(-50%,-50%) rotate(${rotation}deg)`,
+                            transformOrigin: "50% 50%",
+                            pointerEvents: "none",
+                          }}
+                        >
+                          <ConeSVG
+                            id={m.id} // unique gradient ID
+                            color={coneColorFor(m.typeId)}
+                            length={140}
+                            angle={45}
+                          />
+                        </div>
+                      )}
+                
+                      {/* Icon (above) */}
+                      <div style={{ position: "relative", zIndex: 1 }}>{content}</div>
+                
+                      {/* Rotation handle (visible when active) */}
+                      {showCone && activeRotateId === m.id && (
+                        <div
+                          data-rotate-handle
+                          data-marker-id={m.id}
+                          style={{
+                            position: "absolute",
+                            left: "50%",
+                            top: "50%",
+                            transform: `translate(-50%,-50%) rotate(${rotation}deg) translate(0, -70px)`,
+                            transformOrigin: "50% 50%",
+                            width: 18,
+                            height: 18,
+                            borderRadius: "50%",
+                            border: "2px solid #1976d2",
+                            background: "#fff",
+                            boxShadow: "0 1px 4px rgba(0,0,0,.2)",
+                            cursor: "grab",
+                          }}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
 
-  const content = type?.iconSrc ? (
-    <img
-      src={type.iconSrc}
-      alt={type?.label || "icon"}
-      style={{
-        width: 32,
-        height: 32,
-        minWidth: 32,
-        minHeight: 32,
-        objectFit: "contain",
-        pointerEvents: "none",
-      }}
-    />
-  ) : null;
-
-  return (
-    <div
-      key={m.id}
-      data-marker-id={m.id}
-      onDoubleClick={() => removeMarker(m.id)}
-      onClick={(e) => {
-        if (!showCone) return;
-        if (justDraggedRef.current) return;
-        e.stopPropagation();
-        setActiveRotateId((cur) => (cur === m.id ? null : m.id));
-      }}
-      style={{
-        position: "absolute",
-        left: `${m.x * 100}%`,
-        top: `${m.y * 100}%`,
-        transform: "translate(-50%, -50%)",
-        cursor: "grab",
-        userSelect: "none",
-        touchAction: "none",
-        background: "transparent",
-        padding: 0,
-        boxShadow: "none",
-      }}
-      title={
-        showCone
-          ? "Click to rotate • Drag to move • Double-click to delete"
-          : "Drag to move • Double-click to delete"
-      }
-    >
-      {/* Cone (behind icon) */}
-      {showCone && (
-        <div
-          style={{
-            position: "absolute",
-            left: "50%",
-            top: "50%",
-            transform: `translate(-50%,-50%) rotate(${rotation}deg)`,
-            transformOrigin: "50% 50%",
-            pointerEvents: "none",
-          }}
-        >
-          <ConeSVG
-            id={m.id} // unique gradient ID
-            color={coneColorFor(m.typeId)}
-            length={140}
-            angle={45}
-          />
-        </div>
-      )}
-
-      {/* Icon (above) */}
-      <div style={{ position: "relative", zIndex: 1 }}>{content}</div>
-
-      {/* Rotation handle (visible when active) */}
-      {showCone && activeRotateId === m.id && (
-        <div
-          data-rotate-handle
-          data-marker-id={m.id}
-          style={{
-            position: "absolute",
-            left: "50%",
-            top: "50%",
-            transform: `translate(-50%,-50%) rotate(${rotation}deg) translate(0, -70px)`,
-            transformOrigin: "50% 50%",
-            width: 18,
-            height: 18,
-            borderRadius: "50%",
-            border: "2px solid #1976d2",
-            background: "#fff",
-            boxShadow: "0 1px 4px rgba(0,0,0,.2)",
-            cursor: "grab",
-          }}
-        />
-      )}
-    </div>
-  );
-})}
 
       </main>
 
