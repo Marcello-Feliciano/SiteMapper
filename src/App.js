@@ -608,7 +608,7 @@ export default function App() {
                 cursor: "pointer",
               }}
             >
-              <div style={{ fontSize: 44, color: "#1976d2", marginBottom: 8 }}☁️</div>
+              <div style={{ fontSize: 44, color: "#1976d2", marginBottom: 8 }}>☁️</div>
               <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 4 }}>
                 Upload Floorplan
               </div>
