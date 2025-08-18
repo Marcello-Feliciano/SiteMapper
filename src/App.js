@@ -803,8 +803,8 @@ export default function App() {
                   );
                 })}
               </div> {/* overlayRef */}
-            </div> {/* imageWrapRef */}
-          </div> {/* stageRef */}
+              </div> {/* imageWrapRef */}
+              </div> {/* stageRef */}
 
 
       </main>
