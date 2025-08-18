@@ -647,7 +647,7 @@ export default function App() {
               padding: 8, // this padding no longer throws markers off
               maxWidth: "min(95vw, 1200px)",
               overflow: "auto",
-              touchAction: "none",
+              touchAction: "auto",
             }}
           >
             {/* Image + overlay wrapper */}
