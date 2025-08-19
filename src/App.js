@@ -292,7 +292,7 @@ export default function App() {
       y,
       iconSrc: type.iconSrc,
       rotation: isConeType(type.id) ? 0 : null,
-      coneColor: isConeType(m.typeId) ? coneColorFor(m.typeId) : null, // ✅ store color per marker
+      coneColor: isConeType(typeId) ? coneColorFor(typeId) : null, // ✅ store color per marker
     },
   ]);
 };
