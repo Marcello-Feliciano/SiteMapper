@@ -292,7 +292,7 @@ export default function App() {
       y,
       iconSrc: type.iconSrc,
       rotation: isConeType(type.id) ? 0 : null,
-      coneColor: isConeType(type.id) ? coneColorFor(type.id) : null, // ✅ store color per marker
+      coneColor: isConeType(m.typeId) ? coneColorFor(m.typeId) : null, // ✅ store color per marker
     },
   ]);
 };
@@ -773,7 +773,7 @@ export default function App() {
                             pointerEvents: "none",
                           }}
                         >
-                          <ConeSVG length={140} angle={45} color={m.coneColor} />
+                          <ConeSVG length={140} angle={45} color={m.coneColor || coneColorFor(m.typeId)} />
                         </div>
                       )}
 
