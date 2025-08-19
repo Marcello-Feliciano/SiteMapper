@@ -172,9 +172,9 @@ export default function App() {
     } catch (err) {
       alert("Failed to import JSON: " + err.message);
     }
-  };
+  }
 
-    } else if (file.type.startsWith("image/")) {
+   else if (file.type.startsWith("image/")) {
       const dataURL = await readFileAsDataURL(file);
       setImageSrc(dataURL);
       setPlaced([]);
