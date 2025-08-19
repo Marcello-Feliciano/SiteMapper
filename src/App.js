@@ -714,7 +714,7 @@ export default function App() {
                   const type = markerTypes.find((t) => t.id === m.typeId);
                   const showCone = isConeType(m.typeId);
                   const rotation = typeof m.rotation === "number" ? m.rotation : 0;
-
+console.log("Marker:", m.typeId, "Cone color:", m.coneColor);
                   const content = type?.iconSrc ? (
                     <img
                       src={type.iconSrc}
