@@ -773,7 +773,7 @@ export default function App() {
                             pointerEvents: "none",
                           }}
                         >
-                          <ConeSVG length={140} angle={45} color={m.coneColor || coneColorFor(m.typeId)} />
+                          <ConeSVG length={140} angle={45} color={m.coneColor} />
                         </div>
                       )}
 
