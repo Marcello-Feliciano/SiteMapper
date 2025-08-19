@@ -129,9 +129,9 @@ export default function App() {
     case "camera":
       return "rgba(255, 0, 0, 0.35)"; // red
     case "projector":
-      return "rgba(255, 204, 0, 0.35)"; // yellow
+      return "rgba(255,215, 0, 0.35)"; // yellow
     case "speaker":
-      return "rgba(255, 165, 0, 0.35)"; // orange
+      return "rgba(255,127,80, 0.35)"; // orange
     default:
       return "rgba(0, 200, 0, 0.35)"; // fallback green
   }
