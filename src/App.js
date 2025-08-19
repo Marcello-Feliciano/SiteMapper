@@ -127,13 +127,13 @@ export default function App() {
   const coneColorFor = (typeId) => {
   switch (typeId) {
     case "camera":
-      return "rgba(255, 0, 0, 0.35)"; // red
+      return "rgba(255, 0, 0, 0.45)"; // red
     case "projector":
-      return "rgba(255,215, 0, 0.35)"; // yellow
+      return "rgba(255,215, 0, 0.45)"; // yellow
     case "speaker":
-      return "rgba(255,127,80, 0.35)"; // orange
+      return "rgba(255,127,80, 0.45)"; // orange
     default:
-      return "rgba(0, 200, 0, 0.35)"; // fallback green
+      return "rgba(0, 200, 0, 0.45)"; // fallback green
   }
 };
 
