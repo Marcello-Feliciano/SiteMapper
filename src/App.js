@@ -127,13 +127,13 @@ export default function App() {
   const coneColorFor = (typeId) => {
   switch (typeId) {
     case "camera":
-      return "rgba(255, 0, 0, 0.45)"; // red
+      return "rgba(255, 0, 0, 0.5)"; // red
     case "projector":
-      return "rgba(255,215, 0, 0.45)"; // yellow
+      return "rgba(255,220, 0, 0.5)"; // yellow
     case "speaker":
-      return "rgba(255,127,80, 0.45)"; // orange
+      return "rgba(255,180,80, 0.5)"; // orange
     default:
-      return "rgba(0, 200, 0, 0.45)"; // fallback green
+      return "rgba(0, 200, 0, 0.5)"; // fallback green
   }
 };
 
@@ -239,6 +239,9 @@ export default function App() {
       backgroundColor: null,
       scale,
       onclone: (clonedDoc) => {
+        clonedDoc.querySelectorAll(".rotate-handle").forEach(el => {
+          el.style.display = "none";
+        });
         const clonedImg = clonedDoc.getElementById("floorplan-image");
         if (clonedImg) {
           clonedImg.style.width = `${displayedW}px`;
@@ -788,6 +791,7 @@ console.log("Marker:", m.typeId, "Cone color:", m.coneColor);
                         <div
                           data-rotate-handle
                           data-marker-id={m.id}
+                          className="rotate-handle"
                           // place the handle 70px away in the current cone direction
                           style={{
                             position: "absolute",
