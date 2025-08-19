@@ -48,7 +48,7 @@ export default function App() {
     { id: "cardreader", label: "Card", iconSrc: require("./assets/card.png") },
     { id: "tv", label: "TV", iconSrc: require("./assets/tv.png") },
     { id: "wifi", label: "Wi-Fi", iconSrc: require("./assets/wifi.png") },
-    { id: "projector", label: "Proj", iconSrc: require("./assets/projector.png") },
+    { id: "projector", label: "Projector", iconSrc: require("./assets/projector.png") },
     { id: "screen", label: "Screen", iconSrc: require("./assets/screen.png") },
     { id: "speaker", label: "Speaker", iconSrc: require("./assets/speaker.png") },
     { id: "rack", label: "Rack", iconSrc: require("./assets/rack.png") },
