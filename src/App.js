@@ -2,7 +2,7 @@ import React, { useRef, useState } from "react";
 import html2canvas from "html2canvas";
 
 // ---------- Cone SVG helper (45° total angle, soft fade) ----------
-function ConeSVG({ length = 140, angle = 45, color = "rgba(0,200,0,0.35)" }) {
+function ConeSVG({ length = 140, angle = 45, color = "rgba(0,200,0,0.35)", gradId }) {
   const half = angle / 2;
   const rad = (deg) => (deg * Math.PI) / 180;
 
@@ -10,6 +10,8 @@ function ConeSVG({ length = 140, angle = 45, color = "rgba(0,200,0,0.35)" }) {
   const y1 = -Math.cos(rad(-half)) * length;
   const x2 = Math.sin(rad(half)) * length;
   const y2 = -Math.cos(rad(half)) * length;
+
+  const id = gradId || "coneGrad"; // unique per marker
 
   return (
     <svg
@@ -19,12 +21,12 @@ function ConeSVG({ length = 140, angle = 45, color = "rgba(0,200,0,0.35)" }) {
       style={{ display: "block", pointerEvents: "none" }}
     >
       <defs>
-        <linearGradient id="coneGrad" x1="0" y1="0" x2="0" y2="1">
+        <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor={color} stopOpacity="0.6" />
           <stop offset="100%" stopColor={color} stopOpacity="0.0" />
         </linearGradient>
       </defs>
-      <path d={`M 0 0 L ${x1} ${y1} L ${x2} ${y2} Z`} fill="url(#coneGrad)" />
+      <path d={`M 0 0 L ${x1} ${y1} L ${x2} ${y2} Z`} fill={`url(#${id})`} />
     </svg>
   );
 }
@@ -773,7 +775,7 @@ console.log("Marker:", m.typeId, "Cone color:", m.coneColor);
                             pointerEvents: "none",
                           }}
                         >
-                          <ConeSVG length={140} angle={45} color={m.coneColor} />
+                          <ConeSVG length={140} angle={45} color={m.coneColor} gradId={`coneGrad-${m.id}`} />
                         </div>
                       )}
 
