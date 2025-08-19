@@ -144,30 +144,36 @@ export default function App() {
     if (!file) return;
 
     if (file.type === "application/json") {
-      try {
-        const text = await file.text();
-        const data = JSON.parse(text);
-        if (!data.imageData || !Array.isArray(data.markers))
-          throw new Error("Invalid JSON");
-        setImageSrc(data.imageData);
-        setPlaced(
-          data.markers.map((m) => ({
-            id: m.id || crypto.randomUUID(),
-            typeId: m.typeId,
-            x: m.x,
-            y: m.y,
-            iconSrc: markerTypes.find((t) => t.id === m.typeId)?.iconSrc,
-            rotation:
-              typeof m.rotation === "number"
-                ? m.rotation
-                : isConeType(m.typeId)
-                ? 0
-                : null,
-          }))
-        );
-      } catch (err) {
-        alert("Failed to import JSON: " + err.message);
-      }
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      if (!data.imageData || !Array.isArray(data.markers))
+        throw new Error("Invalid JSON");
+  
+      setImageSrc(data.imageData);
+      setPlaced(
+        data.markers.map((m) => ({
+          id: m.id || crypto.randomUUID(),
+          typeId: m.typeId,
+          x: m.x,
+          y: m.y,
+          iconSrc: markerTypes.find((t) => t.id === m.typeId)?.iconSrc,
+          rotation:
+            typeof m.rotation === "number"
+              ? m.rotation
+              : isConeType(m.typeId)
+              ? 0
+              : null,
+          coneColor: isConeType(m.typeId)
+            ? coneColorFor(m.typeId)
+            : null, // ✅ restore cone color on import
+        }))
+      );
+    } catch (err) {
+      alert("Failed to import JSON: " + err.message);
+    }
+  }
+
     } else if (file.type.startsWith("image/")) {
       const dataURL = await readFileAsDataURL(file);
       setImageSrc(dataURL);
@@ -256,39 +262,41 @@ export default function App() {
   // -------------- Placement + dragging --------------
 
   const placeMarkerAtEvent = (e) => {
-    if (!getSelectedType() && !e.target.closest?.("[data-marker-id]")) {
-      setActiveRotateId(null);
-    }
+  if (!getSelectedType() && !e.target.closest?.("[data-marker-id]")) {
+    setActiveRotateId(null);
+  }
 
-    if (!getSelectedType() || !overlayRef.current) return;
+  if (!getSelectedType() || !overlayRef.current) return;
 
-    const onMarker = e.target.closest?.("[data-marker-id]");
-    const onRotate = e.target.closest?.("[data-rotate-handle]");
-    if (onMarker || onRotate) return;
+  const onMarker = e.target.closest?.("[data-marker-id]");
+  const onRotate = e.target.closest?.("[data-rotate-handle]");
+  if (onMarker || onRotate) return;
 
-    if (justDraggedRef.current) {
-      justDraggedRef.current = false;
-      return;
-    }
+  if (justDraggedRef.current) {
+    justDraggedRef.current = false;
+    return;
+  }
 
-    const rect = overlayRef.current.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / rect.width;
-    const y = (e.clientY - rect.top) / rect.height;
-    if (x < 0 || x > 1 || y < 0 || y > 1) return;
+  const rect = overlayRef.current.getBoundingClientRect();
+  const x = (e.clientX - rect.left) / rect.width;
+  const y = (e.clientY - rect.top) / rect.height;
+  if (x < 0 || x > 1 || y < 0 || y > 1) return;
 
-    const type = getSelectedType();
-    setPlaced((list) => [
-      ...list,
-      {
-        id: crypto.randomUUID(),
-        typeId: type.id,
-        x,
-        y,
-        iconSrc: type.iconSrc,
-        rotation: isConeType(type.id) ? 0 : null,
-      },
-    ]);
-  };
+  const type = getSelectedType();
+  setPlaced((list) => [
+    ...list,
+    {
+      id: crypto.randomUUID(),
+      typeId: type.id,
+      x,
+      y,
+      iconSrc: type.iconSrc,
+      rotation: isConeType(type.id) ? 0 : null,
+      coneColor: isConeType(type.id) ? coneColorFor(type.id) : null, // ✅ store color per marker
+    },
+  ]);
+};
+
 
   // Begin a pending drag (do not immediately set pointer capture)
   const beginPendingDrag = (id, e) => {
@@ -755,6 +763,7 @@ export default function App() {
                       {/* Cone (behind icon) */}
                       {showCone && (
                         <div
+                          key={m.id + "-cone"} // unique key per marker
                           style={{
                             position: "absolute",
                             left: "50%",
@@ -764,9 +773,10 @@ export default function App() {
                             pointerEvents: "none",
                           }}
                         >
-                          <ConeSVG length={140} angle={45} color={coneColorFor(m.typeId)} />
+                          <ConeSVG length={140} angle={45} color={m.coneColor} />
                         </div>
                       )}
+
 
                       {/* Icon (above) */}
                       <div style={{ position: "relative", zIndex: 1 }}>{content}</div>
