@@ -49,9 +49,11 @@ export default function App() {
     { id: "tv", label: "TV", iconSrc: require("./assets/tv.png") },
     { id: "wifi", label: "Wi-Fi", iconSrc: require("./assets/wifi.png") },
     { id: "projector", label: "Proj", iconSrc: require("./assets/projector.png") },
+    { id: "screen", label: "Screen", iconSrc: require("./assets/screen.png") },
     { id: "speaker", label: "Speaker", iconSrc: require("./assets/speaker.png") },
     { id: "rack", label: "Rack", iconSrc: require("./assets/rack.png") },
     { id: "vape", label: "Vape", iconSrc: require("./assets/vape.png") },
+    { id: "plate", label: "Plate", iconSrc: require("./assets/plate.png") },
   ];
   const [selectedTypeId, setSelectedTypeId] = useState(null);
 
